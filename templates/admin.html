@@ -553,7 +553,7 @@ function displayHistoryTransactions(page) {
             <td>
                 ${transaction.screenshot ? 
                     `<button class="btn btn-sm btn-link image-link" 
-                             data-image-url="/static/${transaction.screenshot}"
+                             data-image-url="/uploads/${transaction.screenshot}"
                              data-bs-toggle="modal" 
                              data-bs-target="#imageModal">
                         View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
@@ -645,7 +645,7 @@ function updatePendingTransactions() {
                     <td>
                         ${transaction.screenshot ? 
                             `<button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}"
+                                    data-image-url="/uploads/${transaction.screenshot}"
                                     data-bs-toggle="modal" 
                                     data-bs-target="#imageModal">
                                 View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
@@ -807,7 +807,7 @@ function refreshPendingTransactions() {
                     <td>
                         ${transaction.screenshot ? 
                             `<button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}"
+                                    data-image-url="/uploads/${transaction.screenshot}"
                                     data-bs-toggle="modal" 
                                     data-bs-target="#imageModal">
                                 View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}

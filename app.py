@@ -46,14 +46,14 @@ try:
     if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
         # We're on Railway with a volume mount
         storage_base = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'))
-        db_dir = storage_base  # Use the volume root for database
-        upload_dir = os.path.join(storage_base, 'uploads')  # Store uploads in the same volume
+        db_dir = os.path.join(storage_base, 'database')  # Database directory in volume
+        upload_dir = os.path.join(storage_base, 'uploads')  # Store uploads in volume
         logger.info(f"Using Railway volume mount path for storage: {storage_base}")
     else:
         # Local development
         storage_base = basedir
         db_dir = os.path.join(storage_base, 'database')
-        upload_dir = os.path.join(storage_base, 'static')
+        upload_dir = os.path.join(storage_base, 'static', 'uploads')
         logger.info(f"Using local storage path: {storage_base}")
     
     # Create necessary directories
@@ -766,7 +766,7 @@ def internal_error(error):
 def not_found_error(error):
     return render_template('error.html', error=error), 404
 
-@app.route('/static/<path:filename>')
+@app.route('/uploads/<path:filename>')
 def serve_file(filename):
     """Serve files from the upload directory"""
     try:
@@ -788,6 +788,7 @@ def serve_file(filename):
         
         # Construct the full path including subdirectory
         full_path = os.path.join(base_dir, subdirectory, clean_filename)
+        logger.info(f"Attempting to serve file from: {full_path}")
         
         # Check if file exists
         if not os.path.exists(full_path):
