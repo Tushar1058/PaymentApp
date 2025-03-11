@@ -11,5 +11,5 @@ restartPolicyMaxRetries = 5
 
 [mounts]
 source = "/data"
-destination = "/app/data"
+destination = "/app/database"
 type = "volume" 

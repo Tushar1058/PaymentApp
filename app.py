@@ -45,9 +45,9 @@ try:
     # Configure storage based on environment
     if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
         # We're on Railway with a volume mount
-        storage_base = os.getenv('RAILWAY_VOLUME_MOUNT_PATH')
-        db_dir = os.path.join(storage_base, 'database')
-        upload_dir = os.path.join(storage_base, 'uploads')
+        storage_base = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'))
+        db_dir = storage_base  # Use the volume root for database
+        upload_dir = os.path.join(storage_base, 'uploads')  # Store uploads in the same volume
         logger.info(f"Using Railway volume mount path for storage: {storage_base}")
     else:
         # Local development
@@ -57,18 +57,16 @@ try:
         logger.info(f"Using local storage path: {storage_base}")
     
     # Create necessary directories
-    for dir_path in [db_dir, upload_dir]:
-        if not os.path.exists(dir_path):
-            logger.info(f"Creating directory: {dir_path}")
-            os.makedirs(dir_path, exist_ok=True)
+    os.makedirs(db_dir, exist_ok=True)
+    os.makedirs(upload_dir, exist_ok=True)
+    logger.info(f"Created base directories: {db_dir}, {upload_dir}")
     
     # Create subdirectories for different types of uploads
     for folder in ['screenshots', 'qr_codes']:
         folder_path = os.path.join(upload_dir, folder)
         try:
-            if not os.path.exists(folder_path):
-                logger.info(f"Creating directory: {folder_path}")
-                os.makedirs(folder_path, exist_ok=True)
+            os.makedirs(folder_path, exist_ok=True)
+            logger.info(f"Created upload subdirectory: {folder_path}")
         except Exception as e:
             logger.error(f"Error creating directory {folder_path}: {str(e)}")
             pass
@@ -391,13 +389,15 @@ def deposit():
             
             screenshot = request.files['screenshot']
             if screenshot and allowed_file(screenshot.filename):
-                # Generate secure filename
-                filename = secure_filename(f"{datetime.now().timestamp()}_{screenshot.filename}")
+                # Generate secure filename with timestamp
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = secure_filename(f"{timestamp}_{screenshot.filename}")
                 filepath = os.path.join('screenshots', filename)
                 full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots', filename)
                 
                 # Save file
                 screenshot.save(full_path)
+                logger.info(f"Saved screenshot to: {full_path}")
                 
                 # Create transaction with relative path
                 transaction = Transaction(
@@ -432,27 +432,27 @@ def withdraw():
             amount = float(request.form['amount'])
             upi_id = request.form['upi_id']
             
-            # Validate amount
+            # Validate amount and UPI ID
             if amount < 10:
                 return jsonify({'error': 'Minimum withdrawal amount is ₹10'}), 400
             if amount > 10000:
                 return jsonify({'error': 'Maximum withdrawal amount is ₹10,000'}), 400
             if amount > current_user.balance:
                 return jsonify({'error': 'Insufficient balance'}), 400
-            
-            # Validate UPI ID
             if not upi_id or len(upi_id) < 5:
                 return jsonify({'error': 'Please enter a valid UPI ID'}), 400
             
             qr_image = request.files['qr_code']
             if qr_image and allowed_file(qr_image.filename):
-                # Generate secure filename
-                filename = secure_filename(f"{datetime.now().timestamp()}_{qr_image.filename}")
+                # Generate secure filename with timestamp
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = secure_filename(f"{timestamp}_{qr_image.filename}")
                 filepath = os.path.join('qr_codes', filename)
                 full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes', filename)
                 
                 # Save file
                 qr_image.save(full_path)
+                logger.info(f"Saved QR code to: {full_path}")
                 
                 # Create transaction with relative path
                 transaction = Transaction(
@@ -747,9 +747,21 @@ def not_found_error(error):
 @app.route('/static/<path:filename>')
 def serve_file(filename):
     """Serve files from the upload directory"""
-    if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-    return send_from_directory('static', filename)
+    try:
+        if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
+            # For Railway deployment, serve from volume
+            logger.info(f"Serving file from volume: {filename}")
+            # Check if file exists
+            full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if not os.path.exists(full_path):
+                logger.error(f"File not found: {full_path}")
+                return "File not found", 404
+            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+        # For local development, serve from static directory
+        return send_from_directory('static', filename)
+    except Exception as e:
+        logger.error(f"Error serving file {filename}: {str(e)}")
+        return "Error serving file", 500
 
 def allowed_file(filename):
     """Check if file extension is allowed"""
