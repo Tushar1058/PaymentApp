@@ -7,4 +7,9 @@ startCommand = "gunicorn app:app --log-file -"
 healthcheckPath = "/"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 5 
+restartPolicyMaxRetries = 5
+
+[mounts]
+source = "/data"
+destination = "/app/data"
+type = "volume" 

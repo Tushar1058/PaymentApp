@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, session, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
 
 # Configure logging
 logging.basicConfig(
@@ -37,49 +38,52 @@ app.config['REMEMBER_COOKIE_SECURE'] = False  # Set to True in production with H
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to remember cookie
 
 try:
-    # Update database configuration
+    # Configure base directories
     basedir = os.path.abspath(os.path.dirname(__file__))
     logger.info(f"Base directory: {basedir}")
     
-    # Configure database URI based on environment
+    # Configure storage based on environment
     if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
         # We're on Railway with a volume mount
-        db_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'database')
-        logger.info(f"Using Railway volume mount path: {db_dir}")
+        storage_base = os.getenv('RAILWAY_VOLUME_MOUNT_PATH')
+        db_dir = os.path.join(storage_base, 'database')
+        upload_dir = os.path.join(storage_base, 'uploads')
+        logger.info(f"Using Railway volume mount path for storage: {storage_base}")
     else:
         # Local development
-        db_dir = os.path.join(basedir, 'database')
-        logger.info(f"Using local database path: {db_dir}")
+        storage_base = basedir
+        db_dir = os.path.join(storage_base, 'database')
+        upload_dir = os.path.join(storage_base, 'static')
+        logger.info(f"Using local storage path: {storage_base}")
     
-    # Create database directory if it doesn't exist
-    if not os.path.exists(db_dir):
-        logger.info(f"Creating database directory: {db_dir}")
-        os.makedirs(db_dir, exist_ok=True)
+    # Create necessary directories
+    for dir_path in [db_dir, upload_dir]:
+        if not os.path.exists(dir_path):
+            logger.info(f"Creating directory: {dir_path}")
+            os.makedirs(dir_path, exist_ok=True)
     
-    # Set the database URI
-    db_path = os.path.join(db_dir, 'wallet.db')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-    logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    # Update static file handling
-    UPLOAD_FOLDER = os.path.join(basedir, 'static')
-    logger.info(f"Upload folder: {UPLOAD_FOLDER}")
-    
-    # Create required directories with error handling
+    # Create subdirectories for different types of uploads
     for folder in ['screenshots', 'qr_codes']:
-        folder_path = os.path.join(UPLOAD_FOLDER, folder)
+        folder_path = os.path.join(upload_dir, folder)
         try:
             if not os.path.exists(folder_path):
                 logger.info(f"Creating directory: {folder_path}")
                 os.makedirs(folder_path, exist_ok=True)
         except Exception as e:
             logger.error(f"Error creating directory {folder_path}: {str(e)}")
-            # Continue even if directory creation fails
             pass
-            
+
+    # Set the database URI
+    db_path = os.path.join(db_dir, 'wallet.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    
+    # Configure upload folder
+    app.config['UPLOAD_FOLDER'] = upload_dir
+    logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+
 except Exception as e:
-    logger.error(f"Error during app initialization: {str(e)}")
+    logger.error(f"Error during storage initialization: {str(e)}")
     raise
 
 db = SQLAlchemy(app)
@@ -375,16 +379,6 @@ def get_latest_transaction_status():
 @app.route('/deposit', methods=['GET', 'POST'])
 @login_required
 def deposit():
-    # Check for pending transactions
-    pending_transaction = Transaction.query.filter_by(
-        user_id=current_user.id,
-        status='pending'
-    ).first()
-    
-    if pending_transaction:
-        flash('You have a pending transaction. Please wait for it to complete.', 'warning')
-        return redirect(url_for('index'))
-    
     if request.method == 'POST':
         try:
             amount = float(request.form['amount'])
@@ -395,65 +389,44 @@ def deposit():
             if amount > 10000:
                 return jsonify({'error': 'Maximum deposit amount is ₹10,000'}), 400
             
-            if 'screenshot' not in request.files:
-                return jsonify({'error': 'Payment screenshot is required'}), 400
-                
             screenshot = request.files['screenshot']
+            if screenshot and allowed_file(screenshot.filename):
+                # Generate secure filename
+                filename = secure_filename(f"{datetime.now().timestamp()}_{screenshot.filename}")
+                filepath = os.path.join('screenshots', filename)
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots', filename)
+                
+                # Save file
+                screenshot.save(full_path)
+                
+                # Create transaction with relative path
+                transaction = Transaction(
+                    user_id=current_user.id,
+                    type='deposit',
+                    amount=amount,
+                    screenshot=filepath
+                )
+                db.session.add(transaction)
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'transaction_id': transaction.id,
+                    'message': 'Deposit request submitted successfully'
+                })
             
-            if screenshot.filename == '':
-                return jsonify({'error': 'Payment screenshot is required'}), 400
-            
-            # Validate file type
-            allowed_extensions = {'png', 'jpg', 'jpeg'}
-            if not ('.' in screenshot.filename and \
-                   screenshot.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
-                return jsonify({'error': 'Invalid file type. Only PNG, JPG, and JPEG files are allowed.'}), 400
-            
-            # Save screenshot
-            filename = f"static/screenshots/{datetime.now().timestamp()}_{screenshot.filename}"
-            screenshot.save(filename)
-            
-            # Create transaction
-            transaction = Transaction(
-                user_id=current_user.id,
-                type='deposit',
-                amount=amount,
-                screenshot=filename
-            )
-            db.session.add(transaction)
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'transaction_id': transaction.id,
-                'message': 'Deposit request submitted successfully'
-            })
+            return jsonify({'error': 'Invalid file type'}), 400
             
         except Exception as e:
             db.session.rollback()
-            return jsonify({'error': 'Error processing deposit request. Please try again.'}), 500
-    
-    # Get UPI settings
-    upi_settings = UPISettings.query.first()
-    if not upi_settings:
-        flash('UPI settings not configured. Please contact support.', 'error')
-        return redirect(url_for('index'))
-        
-    return render_template('deposit.html', upi_settings=upi_settings)
+            logger.error(f"Error in deposit: {str(e)}")
+            return jsonify({'error': 'Error processing deposit request'}), 500
+
+    return render_template('deposit.html')
 
 @app.route('/withdraw', methods=['GET', 'POST'])
 @login_required
 def withdraw():
-    # Check for pending transactions
-    pending_transaction = Transaction.query.filter_by(
-        user_id=current_user.id,
-        status='pending'
-    ).first()
-    
-    if pending_transaction:
-        flash('You have a pending transaction. Please wait for it to complete.', 'warning')
-        return redirect(url_for('index'))
-    
     if request.method == 'POST':
         try:
             amount = float(request.form['amount'])
@@ -471,45 +444,40 @@ def withdraw():
             if not upi_id or len(upi_id) < 5:
                 return jsonify({'error': 'Please enter a valid UPI ID'}), 400
             
-            if 'qr_code' not in request.files:
-                return jsonify({'error': 'UPI QR code is required'}), 400
-                
             qr_image = request.files['qr_code']
+            if qr_image and allowed_file(qr_image.filename):
+                # Generate secure filename
+                filename = secure_filename(f"{datetime.now().timestamp()}_{qr_image.filename}")
+                filepath = os.path.join('qr_codes', filename)
+                full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes', filename)
+                
+                # Save file
+                qr_image.save(full_path)
+                
+                # Create transaction with relative path
+                transaction = Transaction(
+                    user_id=current_user.id,
+                    type='withdrawal',
+                    amount=amount,
+                    upi_id=upi_id,
+                    screenshot=filepath
+                )
+                db.session.add(transaction)
+                db.session.commit()
+                
+                return jsonify({
+                    'success': True,
+                    'transaction_id': transaction.id,
+                    'message': 'Withdrawal request submitted successfully'
+                })
             
-            if qr_image.filename == '':
-                return jsonify({'error': 'UPI QR code is required'}), 400
-            
-            # Validate file type
-            allowed_extensions = {'png', 'jpg', 'jpeg'}
-            if not ('.' in qr_image.filename and \
-                   qr_image.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
-                return jsonify({'error': 'Invalid file type. Only PNG, JPG, and JPEG files are allowed.'}), 400
-            
-            # Save QR code image
-            filename = f"static/qr_codes/{datetime.now().timestamp()}_{qr_image.filename}"
-            qr_image.save(filename)
-            
-            # Create transaction
-            transaction = Transaction(
-                user_id=current_user.id,
-                type='withdrawal',
-                amount=amount,
-                upi_id=upi_id,
-                screenshot=filename
-            )
-            db.session.add(transaction)
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'transaction_id': transaction.id,
-                'message': 'Withdrawal request submitted successfully'
-            })
+            return jsonify({'error': 'Invalid file type'}), 400
             
         except Exception as e:
             db.session.rollback()
-            return jsonify({'error': 'Error processing withdrawal request. Please try again.'}), 500
-    
+            logger.error(f"Error in withdrawal: {str(e)}")
+            return jsonify({'error': 'Error processing withdrawal request'}), 500
+
     return render_template('withdraw.html')
 
 @app.route('/admin')
@@ -775,6 +743,18 @@ def internal_error(error):
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('error.html', error=error), 404
+
+@app.route('/static/<path:filename>')
+def serve_file(filename):
+    """Serve files from the upload directory"""
+    if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    return send_from_directory('static', filename)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
