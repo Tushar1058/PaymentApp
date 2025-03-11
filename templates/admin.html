@@ -66,7 +66,7 @@
                         <td>
                             {% if transaction.screenshot %}
                             <button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="{{ url_for('static', filename=transaction.screenshot.split('static/')[-1]) }}">
+                                    data-image-url="{{ url_for('serve_file', filename=transaction.screenshot) }}">
                                 View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
                             </button>
                             {% endif %}
@@ -167,7 +167,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" class="img-fluid" alt="Transaction proof">
+                <img id="modalImage" src="" class="img-fluid" alt="Transaction proof" style="max-height: 80vh;">
             </div>
         </div>
     </div>
@@ -409,24 +409,29 @@ function updateUPISettingsDisplay() {
 
 function showImage(imageUrl) {
     const modalElement = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
     const modal = new bootstrap.Modal(modalElement);
-    document.getElementById('modalImage').src = imageUrl;
+    
+    // Set image source
+    modalImage.src = imageUrl;
+    
+    // Show modal
     modal.show();
     
-    // Ensure proper cleanup when modal is hidden
-    modalElement.addEventListener('hidden.bs.modal', function () {
-        document.getElementById('modalImage').src = '';
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
+    // Handle modal close
+    modalElement.addEventListener('hidden.bs.modal', function() {
+        // Clear image source
+        modalImage.src = '';
         
-        // Remove backdrop if it exists
+        // Remove modal backdrop and reset body styles
         const backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) {
-            backdrop.remove();
-        }
+        if (backdrop) backdrop.remove();
         
-        // Dispose the modal
+        document.body.classList.remove('modal-open');
+        document.body.style.paddingRight = '';
+        document.body.style.overflow = '';
+        
+        // Dispose modal
         modal.dispose();
     }, { once: true });
 }
@@ -545,11 +550,10 @@ function displayHistoryTransactions(page) {
             <td>${transaction.upi_id || 'N/A'}</td>
             <td>
                 ${transaction.screenshot ? `
-                    <a href="#" 
-                       class="transaction-link image-link" 
-                       data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                    <button class="btn btn-sm btn-link image-link" 
+                            data-image-url="/static/${transaction.screenshot}">
                         View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
-                    </a>
+                    </button>
                 ` : ''}
             </td>
         `;

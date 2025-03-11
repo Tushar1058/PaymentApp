@@ -392,14 +392,20 @@ def deposit():
                 # Generate secure filename with timestamp
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = secure_filename(f"{timestamp}_{screenshot.filename}")
-                filepath = os.path.join('screenshots', filename)
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots', filename)
                 
-                # Save file
+                # Create screenshots directory if it doesn't exist
+                screenshots_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots')
+                os.makedirs(screenshots_dir, exist_ok=True)
+                
+                # Save file with full path
+                full_path = os.path.join(screenshots_dir, filename)
                 screenshot.save(full_path)
                 logger.info(f"Saved screenshot to: {full_path}")
                 
-                # Create transaction with relative path
+                # Store relative path in database
+                filepath = os.path.join('screenshots', filename)
+                
+                # Create transaction
                 transaction = Transaction(
                     user_id=current_user.id,
                     type='deposit',
@@ -447,14 +453,20 @@ def withdraw():
                 # Generate secure filename with timestamp
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = secure_filename(f"{timestamp}_{qr_image.filename}")
-                filepath = os.path.join('qr_codes', filename)
-                full_path = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes', filename)
                 
-                # Save file
+                # Create qr_codes directory if it doesn't exist
+                qr_codes_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes')
+                os.makedirs(qr_codes_dir, exist_ok=True)
+                
+                # Save file with full path
+                full_path = os.path.join(qr_codes_dir, filename)
                 qr_image.save(full_path)
                 logger.info(f"Saved QR code to: {full_path}")
                 
-                # Create transaction with relative path
+                # Store relative path in database
+                filepath = os.path.join('qr_codes', filename)
+                
+                # Create transaction
                 transaction = Transaction(
                     user_id=current_user.id,
                     type='withdrawal',
@@ -748,17 +760,36 @@ def not_found_error(error):
 def serve_file(filename):
     """Serve files from the upload directory"""
     try:
+        # Clean the filename to prevent directory traversal
+        filename = secure_filename(os.path.basename(filename))
+        
+        # Determine the correct base directory
         if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
             # For Railway deployment, serve from volume
-            logger.info(f"Serving file from volume: {filename}")
-            # Check if file exists
-            full_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            if not os.path.exists(full_path):
-                logger.error(f"File not found: {full_path}")
-                return "File not found", 404
-            return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-        # For local development, serve from static directory
-        return send_from_directory('static', filename)
+            base_dir = app.config['UPLOAD_FOLDER']
+            logger.info(f"Serving file from Railway volume: {filename}")
+        else:
+            # For local development, serve from static directory
+            base_dir = 'static'
+            logger.info(f"Serving file from local static directory: {filename}")
+        
+        # Construct the full path
+        full_path = os.path.join(base_dir, filename)
+        directory = os.path.dirname(full_path)
+        
+        # Check if file exists
+        if not os.path.exists(full_path):
+            logger.error(f"File not found: {full_path}")
+            return "File not found", 404
+            
+        # Ensure the directory exists
+        os.makedirs(directory, exist_ok=True)
+        
+        # Log the successful file serve
+        logger.info(f"Successfully serving file: {full_path}")
+        
+        # Send the file
+        return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path))
     except Exception as e:
         logger.error(f"Error serving file {filename}: {str(e)}")
         return "Error serving file", 500
