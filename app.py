@@ -6,25 +6,72 @@ import qrcode
 from io import BytesIO
 import base64
 import os
+import sys
+import logging
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+# Print environment variables for debugging (excluding sensitive data)
+logger.info("Environment variables:")
+for key in os.environ:
+    if not any(sensitive in key.lower() for sensitive in ['secret', 'password', 'key']):
+        logger.info(f"{key}: {os.environ[key]}")
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to a secure secret key
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 
-# Update database configuration
-basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.getenv('DATABASE_URL', 'sqlite:///app/database/wallet.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = db_path
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Update static file handling
-UPLOAD_FOLDER = os.path.join(basedir, 'static')
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'screenshots')):
-    os.makedirs(os.path.join(UPLOAD_FOLDER, 'screenshots'))
-if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'qr_codes')):
-    os.makedirs(os.path.join(UPLOAD_FOLDER, 'qr_codes'))
+try:
+    # Update database configuration
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    logger.info(f"Base directory: {basedir}")
+    
+    # Configure database URI based on environment
+    if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
+        # We're on Railway with a volume mount
+        db_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'database')
+        logger.info(f"Using Railway volume mount path: {db_dir}")
+    else:
+        # Local development
+        db_dir = os.path.join(basedir, 'database')
+        logger.info(f"Using local database path: {db_dir}")
+    
+    # Create database directory if it doesn't exist
+    if not os.path.exists(db_dir):
+        logger.info(f"Creating database directory: {db_dir}")
+        os.makedirs(db_dir, exist_ok=True)
+    
+    # Set the database URI
+    db_path = os.path.join(db_dir, 'wallet.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+    logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Update static file handling
+    UPLOAD_FOLDER = os.path.join(basedir, 'static')
+    logger.info(f"Upload folder: {UPLOAD_FOLDER}")
+    
+    # Create required directories with error handling
+    for folder in ['screenshots', 'qr_codes']:
+        folder_path = os.path.join(UPLOAD_FOLDER, folder)
+        try:
+            if not os.path.exists(folder_path):
+                logger.info(f"Creating directory: {folder_path}")
+                os.makedirs(folder_path, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Error creating directory {folder_path}: {str(e)}")
+            # Continue even if directory creation fails
+            pass
+            
+except Exception as e:
+    logger.error(f"Error during app initialization: {str(e)}")
+    raise
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -153,39 +200,57 @@ def handle_db_migration():
                 conn.commit()
 
 def init_db():
-    with app.app_context():
-        # Handle database migration
-        handle_db_migration()
-        
-        # Create tables if they don't exist
-        db.create_all()
-        
-        # Create default UPI settings if not exists
-        if not UPISettings.query.first():
-            default_upi = UPISettings(upi_id="your-upi-id@upi", name="Your Name")
-            db.session.add(default_upi)
-            try:
-                db.session.commit()
-            except:
-                db.session.rollback()
-        
-        # Create default admin user if not exists
-        admin_user = User.query.filter_by(username="tushar77").first()
-        if not admin_user:
-            admin_user = User(
-                username="tushar77",
-                password="tushar@123",
-                is_admin=True,
-                balance=0.0
-            )
-            db.session.add(admin_user)
-            try:
-                db.session.commit()
-            except:
-                db.session.rollback()
+    try:
+        with app.app_context():
+            logger.info("Starting database initialization")
+            
+            # Handle database migration
+            handle_db_migration()
+            
+            # Create tables if they don't exist
+            db.create_all()
+            logger.info("Database tables created successfully")
+            
+            # Create default UPI settings if not exists
+            if not UPISettings.query.first():
+                logger.info("Creating default UPI settings")
+                default_upi = UPISettings(upi_id="your-upi-id@upi", name="Your Name")
+                db.session.add(default_upi)
+                try:
+                    db.session.commit()
+                    logger.info("Default UPI settings created successfully")
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Error creating default UPI settings: {str(e)}")
+            
+            # Create default admin user if not exists
+            admin_user = User.query.filter_by(username="tushar77").first()
+            if not admin_user:
+                logger.info("Creating default admin user")
+                admin_user = User(
+                    username="tushar77",
+                    password="tushar@123",
+                    is_admin=True,
+                    balance=0.0
+                )
+                db.session.add(admin_user)
+                try:
+                    db.session.commit()
+                    logger.info("Default admin user created successfully")
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Error creating default admin user: {str(e)}")
+    
+    except Exception as e:
+        logger.error(f"Error during database initialization: {str(e)}")
+        raise
 
-# Initialize database
-init_db()
+# Initialize database with error handling
+try:
+    init_db()
+except Exception as e:
+    logger.error(f"Failed to initialize database: {str(e)}")
+    # Don't raise here, let the app continue to start
 
 def generate_upi_qr(upi_id, amount, name=None):
     # Generate UPI payment URL
@@ -693,5 +758,16 @@ def clear_transaction_history():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    logger.error(f"Internal Server Error: {str(error)}")
+    return render_template('error.html', error=error), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('error.html', error=error), 404
+
 if __name__ == '__main__':
-    app.run(debug=True) 
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', port=port) 
