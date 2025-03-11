@@ -306,26 +306,45 @@ document.addEventListener('DOMContentLoaded', async function() {
 document.getElementById('withdrawForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    
     const formData = new FormData(this);
     
     fetch('/withdraw', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.text())
-    .then(html => {
-        const match = html.match(/transaction-(\d+)/);
-        if (match) {
-            const transactionId = match[1];
-            // Update URL without reloading
-            window.history.pushState({}, '', `/withdraw?transaction_id=${transactionId}`);
-            // Show status tracker
-            document.getElementById('withdrawForm').style.display = 'none';
-            document.getElementById('transactionStatus').style.display = 'block';
-            // Start checking status
-            updateWithdrawalStatus(transactionId);
-            setInterval(() => updateWithdrawalStatus(transactionId), 5000);
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.error);
         }
+        
+        // Update URL without reloading
+        window.history.pushState({}, '', `/withdraw?transaction_id=${data.transaction_id}`);
+        
+        // Show status tracker
+        document.getElementById('withdrawForm').style.display = 'none';
+        document.getElementById('transactionStatus').style.display = 'block';
+        
+        // Start checking status
+        updateWithdrawalStatus(data.transaction_id);
+        setInterval(() => updateWithdrawalStatus(data.transaction_id), 5000);
+    })
+    .catch(error => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Submit Withdrawal Request';
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+        errorDiv.innerHTML = `
+            <strong>Error!</strong> ${error.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        this.insertBefore(errorDiv, this.firstChild);
     });
 });
 </script>

@@ -8,7 +8,7 @@ import base64
 import os
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +26,12 @@ for key in os.environ:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
+
+# Configure persistent sessions
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Sessions last for 30 days
+app.config['SESSION_COOKIE_SECURE'] = True  # Only send cookie over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 
 try:
     # Update database configuration
@@ -289,7 +295,8 @@ def login():
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
         if user and user.verify_password(password):
-            login_user(user)
+            login_user(user, remember=True)  # Enable "remember me" functionality
+            session.permanent = True  # Make the session permanent
             return redirect(url_for('index'))
         flash('Invalid credentials')
     return render_template('login.html')
@@ -375,28 +382,23 @@ def deposit():
             
             # Validate amount
             if amount < 10:
-                flash('Minimum deposit amount is ₹10', 'error')
-                return redirect(url_for('deposit'))
+                return jsonify({'error': 'Minimum deposit amount is ₹10'}), 400
             if amount > 10000:
-                flash('Maximum deposit amount is ₹10,000', 'error')
-                return redirect(url_for('deposit'))
+                return jsonify({'error': 'Maximum deposit amount is ₹10,000'}), 400
             
             if 'screenshot' not in request.files:
-                flash('Payment screenshot is required', 'error')
-                return redirect(url_for('deposit'))
+                return jsonify({'error': 'Payment screenshot is required'}), 400
                 
             screenshot = request.files['screenshot']
             
             if screenshot.filename == '':
-                flash('Payment screenshot is required', 'error')
-                return redirect(url_for('deposit'))
+                return jsonify({'error': 'Payment screenshot is required'}), 400
             
             # Validate file type
             allowed_extensions = {'png', 'jpg', 'jpeg'}
             if not ('.' in screenshot.filename and \
                    screenshot.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
-                flash('Invalid file type. Only PNG, JPG, and JPEG files are allowed.', 'error')
-                return redirect(url_for('deposit'))
+                return jsonify({'error': 'Invalid file type. Only PNG, JPG, and JPEG files are allowed.'}), 400
             
             # Save screenshot
             filename = f"static/screenshots/{datetime.now().timestamp()}_{screenshot.filename}"
@@ -412,13 +414,15 @@ def deposit():
             db.session.add(transaction)
             db.session.commit()
             
-            flash('Deposit request submitted successfully', 'success')
-            return redirect(url_for('index'))
+            return jsonify({
+                'success': True,
+                'transaction_id': transaction.id,
+                'message': 'Deposit request submitted successfully'
+            })
             
         except Exception as e:
             db.session.rollback()
-            flash('Error processing deposit request. Please try again.', 'error')
-            return redirect(url_for('deposit'))
+            return jsonify({'error': 'Error processing deposit request. Please try again.'}), 500
     
     # Get UPI settings
     upi_settings = UPISettings.query.first()
@@ -448,36 +452,29 @@ def withdraw():
             
             # Validate amount
             if amount < 10:
-                flash('Minimum withdrawal amount is ₹10', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'Minimum withdrawal amount is ₹10'}), 400
             if amount > 10000:
-                flash('Maximum withdrawal amount is ₹10,000', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'Maximum withdrawal amount is ₹10,000'}), 400
             if amount > current_user.balance:
-                flash('Insufficient balance', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'Insufficient balance'}), 400
             
             # Validate UPI ID
             if not upi_id or len(upi_id) < 5:
-                flash('Please enter a valid UPI ID', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'Please enter a valid UPI ID'}), 400
             
             if 'qr_code' not in request.files:
-                flash('UPI QR code is required', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'UPI QR code is required'}), 400
                 
             qr_image = request.files['qr_code']
             
             if qr_image.filename == '':
-                flash('UPI QR code is required', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'UPI QR code is required'}), 400
             
             # Validate file type
             allowed_extensions = {'png', 'jpg', 'jpeg'}
             if not ('.' in qr_image.filename and \
                    qr_image.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
-                flash('Invalid file type. Only PNG, JPG, and JPEG files are allowed.', 'error')
-                return redirect(url_for('withdraw'))
+                return jsonify({'error': 'Invalid file type. Only PNG, JPG, and JPEG files are allowed.'}), 400
             
             # Save QR code image
             filename = f"static/qr_codes/{datetime.now().timestamp()}_{qr_image.filename}"
@@ -494,13 +491,15 @@ def withdraw():
             db.session.add(transaction)
             db.session.commit()
             
-            flash('Withdrawal request submitted successfully', 'success')
-            return redirect(url_for('withdraw', transaction_id=transaction.id))
+            return jsonify({
+                'success': True,
+                'transaction_id': transaction.id,
+                'message': 'Withdrawal request submitted successfully'
+            })
             
         except Exception as e:
             db.session.rollback()
-            flash('Error processing withdrawal request. Please try again.', 'error')
-            return redirect(url_for('withdraw'))
+            return jsonify({'error': 'Error processing withdrawal request. Please try again.'}), 500
     
     return render_template('withdraw.html')
 

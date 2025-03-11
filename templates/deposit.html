@@ -241,25 +241,43 @@ document.getElementById('screenshot').addEventListener('change', function() {
 document.getElementById('depositForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    
     const formData = new FormData(this);
     
     fetch('/deposit', {
         method: 'POST',
         body: formData
     })
-    .then(response => response.text())
-    .then(html => {
-        // Extract transaction ID from the response or URL
-        const match = html.match(/transaction-(\d+)/);
-        if (match) {
-            lastTransactionId = match[1];
-            // Show status tracker
-            document.getElementById('depositForm').style.display = 'none';
-            document.getElementById('transactionStatus').style.display = 'block';
-            // Start checking status
-            checkTransactionStatus();
-            setInterval(checkTransactionStatus, 5000);
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.error);
         }
+        
+        // Show success message
+        document.getElementById('depositForm').style.display = 'none';
+        document.getElementById('transactionStatus').style.display = 'block';
+        
+        // Start checking status
+        lastTransactionId = data.transaction_id;
+        checkTransactionStatus();
+        setInterval(checkTransactionStatus, 5000);
+    })
+    .catch(error => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Submit Proof';
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger alert-dismissible fade show mt-3';
+        errorDiv.innerHTML = `
+            <strong>Error!</strong> ${error.message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.getElementById('depositForm').insertBefore(errorDiv, document.getElementById('amountSection'));
     });
 });
 
