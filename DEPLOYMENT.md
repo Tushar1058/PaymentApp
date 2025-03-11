@@ -59,6 +59,7 @@
    FLASK_APP=app.py
    FLASK_ENV=production
    SECRET_KEY=your-secure-secret-key
+   DATABASE_URL=sqlite:///app/database/wallet.db
    ```
 
 ### 4. Set Up Persistent Storage
@@ -66,8 +67,9 @@
 1. In your Railway project:
 2. Go to "Volumes" tab
 3. Create a new volume
-4. Mount it to `/app/database` and `/app/static`
-5. This ensures your data persists between deployments
+4. Mount it to `/app/database`
+   - This ensures your database persists between deployments
+   - Static files will be handled by the application
 
 ### 5. Domain Setup
 

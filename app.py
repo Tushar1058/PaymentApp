@@ -11,14 +11,20 @@ from datetime import datetime
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to a secure secret key
 
-# Use absolute path for database
+# Update database configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'database', 'wallet.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
+db_path = os.getenv('DATABASE_URL', 'sqlite:///app/database/wallet.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Ensure database directory exists
-os.makedirs(os.path.dirname(db_path), exist_ok=True)
+# Update static file handling
+UPLOAD_FOLDER = os.path.join(basedir, 'static')
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'screenshots')):
+    os.makedirs(os.path.join(UPLOAD_FOLDER, 'screenshots'))
+if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'qr_codes')):
+    os.makedirs(os.path.join(UPLOAD_FOLDER, 'qr_codes'))
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -177,10 +183,6 @@ def init_db():
                 db.session.commit()
             except:
                 db.session.rollback()
-
-# Create required directories
-os.makedirs('static/screenshots', exist_ok=True)
-os.makedirs('static/qr_codes', exist_ok=True)
 
 # Initialize database
 init_db()
