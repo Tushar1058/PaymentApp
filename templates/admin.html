@@ -159,8 +159,8 @@
 </div>
 
 <!-- Image Modal -->
-<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade" id="imageModal" tabindex="-1" role="dialog" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="imageModalLabel">Transaction Proof</h5>
@@ -337,13 +337,33 @@
     }
 }
 
+.modal {
+    z-index: 1050;
+}
+
 .modal-backdrop {
-    opacity: 0.5;
+    z-index: 1040;
+}
+
+.modal-open {
+    overflow: hidden;
+    padding-right: 0 !important;
+}
+
+.modal-dialog {
+    max-width: 90%;
+    margin: 1.75rem auto;
 }
 
 .img-fluid {
-    max-width: 100%;
-    height: auto;
+    max-height: 80vh;
+    width: auto;
+}
+
+@media (min-width: 992px) {
+    .modal-lg {
+        max-width: 800px;
+    }
 }
 
 .btn-link {
@@ -388,13 +408,25 @@ function updateUPISettingsDisplay() {
 }
 
 function showImage(imageUrl) {
-    const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+    const modalElement = document.getElementById('imageModal');
+    const modal = new bootstrap.Modal(modalElement);
     document.getElementById('modalImage').src = imageUrl;
     modal.show();
     
     // Ensure proper cleanup when modal is hidden
-    document.getElementById('imageModal').addEventListener('hidden.bs.modal', function () {
+    modalElement.addEventListener('hidden.bs.modal', function () {
         document.getElementById('modalImage').src = '';
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        
+        // Remove backdrop if it exists
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+        
+        // Dispose the modal
         modal.dispose();
     }, { once: true });
 }
