@@ -771,9 +771,12 @@ def serve_file(filename):
     """Serve files from the upload directory"""
     try:
         # Clean the filename to prevent directory traversal
-        filename = secure_filename(os.path.basename(filename))
+        clean_filename = secure_filename(os.path.basename(filename))
         
-        # Determine the correct base directory and file path
+        # Get the subdirectory (screenshots or qr_codes) from the path
+        subdirectory = os.path.dirname(filename)
+        
+        # Determine the correct base directory
         if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
             # For Railway deployment, serve from volume
             base_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'uploads')
@@ -783,8 +786,8 @@ def serve_file(filename):
             base_dir = os.path.join(app.config['UPLOAD_FOLDER'])
             logger.info(f"Serving file from local directory: {filename}")
         
-        # Construct the full path
-        full_path = os.path.join(base_dir, filename)
+        # Construct the full path including subdirectory
+        full_path = os.path.join(base_dir, subdirectory, clean_filename)
         
         # Check if file exists
         if not os.path.exists(full_path):
@@ -794,8 +797,8 @@ def serve_file(filename):
         # Log the successful file serve
         logger.info(f"Successfully serving file: {full_path}")
         
-        # Send the file
-        return send_from_directory(base_dir, filename)
+        # Send the file from the correct subdirectory
+        return send_from_directory(os.path.join(base_dir, subdirectory), clean_filename)
     except Exception as e:
         logger.error(f"Error serving file {filename}: {str(e)}")
         return "Error serving file", 500

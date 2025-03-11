@@ -66,7 +66,9 @@
                         <td>
                             {% if transaction.screenshot %}
                             <button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="{{ url_for('serve_file', filename=transaction.screenshot) }}">
+                                    data-image-url="{{ url_for('serve_file', filename=transaction.screenshot) }}"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#imageModal">
                                 View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
                             </button>
                             {% endif %}
@@ -549,12 +551,14 @@ function displayHistoryTransactions(page) {
             </td>
             <td>${transaction.upi_id || 'N/A'}</td>
             <td>
-                ${transaction.screenshot ? `
-                    <button class="btn btn-sm btn-link image-link" 
-                            data-image-url="/static/${transaction.screenshot}">
+                ${transaction.screenshot ? 
+                    `<button class="btn btn-sm btn-link image-link" 
+                             data-image-url="/static/${transaction.screenshot}"
+                             data-bs-toggle="modal" 
+                             data-bs-target="#imageModal">
                         View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
-                    </button>
-                ` : ''}
+                    </button>` : 
+                    'N/A'}
             </td>
         `;
         tbody.appendChild(tr);
@@ -639,12 +643,14 @@ function updatePendingTransactions() {
                     <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
                     <td>${transaction.upi_id || 'N/A'}</td>
                     <td>
-                        ${transaction.screenshot ? `
-                            <button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                        ${transaction.screenshot ? 
+                            `<button class="btn btn-sm btn-link image-link" 
+                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#imageModal">
                                 View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
-                            </button>
-                        ` : ''}
+                            </button>` : 
+                            'N/A'}
                     </td>
                     <td>
                         <div class="progress" style="height: 20px;">
@@ -799,12 +805,14 @@ function refreshPendingTransactions() {
                     <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
                     <td>${transaction.upi_id || 'N/A'}</td>
                     <td>
-                        ${transaction.screenshot ? `
-                            <button class="btn btn-sm btn-link image-link" 
-                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                        ${transaction.screenshot ? 
+                            `<button class="btn btn-sm btn-link image-link" 
+                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}"
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#imageModal">
                                 View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
-                            </button>
-                        ` : ''}
+                            </button>` : 
+                            'N/A'}
                     </td>
                     <td>
                         <div class="progress" style="height: 20px;">
@@ -908,6 +916,28 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Start the update schedule with a longer interval
     setInterval(refreshPendingTransactions, 60000); // Check every minute
+});
+
+// Add this JavaScript code for handling image modal
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle image modal
+    const imageModal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    
+    document.querySelectorAll('.image-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const imageUrl = this.getAttribute('data-image-url');
+            modalImage.src = imageUrl;
+            const modal = new bootstrap.Modal(imageModal);
+            modal.show();
+        });
+    });
+    
+    // Clean up modal when hidden
+    imageModal.addEventListener('hidden.bs.modal', function () {
+        modalImage.src = '';
+    });
 });
 </script>
 {% endblock %} 
