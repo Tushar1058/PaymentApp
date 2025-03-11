@@ -60,10 +60,19 @@
                     <tr id="transaction-{{ transaction.id }}" class="transaction-row">
                         <td class="text-nowrap">{{ transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                         <td>{{ transaction.user.username }}</td>
-                        <td>{{ transaction.type.capitalize() }}</td>
+                        <td>
+                            <div class="transaction-type">
+                                <i class="fas {% if transaction.type == 'deposit' %}fa-arrow-up text-success{% else %}fa-arrow-down text-danger{% endif %}"></i>
+                                {{ transaction.type.capitalize() }}
+                            </div>
+                        </td>
                         <td class="text-nowrap">₹{{ "%.2f"|format(transaction.amount) }}</td>
-                        <td>{{ transaction.upi_id if transaction.upi_id else 'N/A' }}</td>
-                        <td>{{ transaction.bank_account_name if transaction.bank_account_name else 'N/A' }}</td>
+                        <td>
+                            <div class="transaction-info">
+                                <span>{{ transaction.upi_id if transaction.upi_id else 'N/A' }}</span>
+                                <small>{{ transaction.bank_account_name if transaction.bank_account_name else 'N/A' }}</small>
+                            </div>
+                        </td>
                         <td>
                             {% if transaction.screenshot %}
                             <button class="btn btn-sm btn-link image-link" 
@@ -441,8 +450,90 @@
         padding: 0;
         width: 100%;
         border-radius: 0.5rem;
-        overflow: hidden;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .image-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+        color: #0d6efd;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .image-link:hover {
+        text-decoration: underline;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 100px;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+        margin: 0;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Fix scrolling and table layout */
+.table-container {
+    position: relative;
+    overflow: hidden;
+    margin: -1rem;
+    padding: 1rem;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 70vh;
+    scrollbar-width: thin;
+}
+
+.table-responsive::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Fix image link display */
+.image-link {
+    color: #0d6efd;
+    text-decoration: none;
+    padding: 0.25rem 0;
+    display: inline-block;
+    font-size: 0.9rem;
+}
+
+.image-link:hover {
+    text-decoration: underline;
+}
+
+.proof-cell {
+    min-width: 120px;
 }
 </style>
 
@@ -628,13 +719,14 @@ function displayHistoryTransactions(page) {
                     <small>${transaction.bank_account_name || 'N/A'}</small>
                 </div>
             </td>
-            <td>
+            <td class="proof-cell">
                 ${transaction.screenshot ? 
                     `<button class="btn btn-sm btn-link image-link" 
                              data-image-url="/uploads/${transaction.screenshot}"
                              data-bs-toggle="modal" 
                              data-bs-target="#imageModal">
-                        View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
+                        <i class="fas fa-image me-1"></i>
+                        ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
                     </button>` : 
                     'N/A'}
             </td>
@@ -875,10 +967,19 @@ function refreshPendingTransactions() {
                 <tr id="transaction-${transaction.id}">
                     <td>${new Date(transaction.timestamp).toLocaleString()}</td>
                     <td>${transaction.username}</td>
-                    <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+                    <td>
+                        <div class="transaction-type">
+                            <i class="fas ${transaction.type === 'deposit' ? 'fa-arrow-up text-success' : 'fa-arrow-down text-danger'}"></i>
+                            ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                        </div>
+                    </td>
                     <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
-                    <td>${transaction.upi_id || 'N/A'}</td>
-                    <td>${transaction.bank_account_name || 'N/A'}</td>
+                    <td>
+                        <div class="transaction-info">
+                            <span>${transaction.upi_id || 'N/A'}</span>
+                            <small>${transaction.bank_account_name || 'N/A'}</small>
+                        </div>
+                    </td>
                     <td>
                         ${transaction.screenshot ? 
                             `<button class="btn btn-sm btn-link image-link" 

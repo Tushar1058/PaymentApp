@@ -136,6 +136,45 @@
     border-top: 1px solid var(--border-color);
     padding: 1rem 1.5rem;
 }
+
+/* Add styles for action buttons */
+.action-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.action-button {
+    flex: 1;
+    min-width: 150px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.action-button i {
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .action-buttons-container {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .action-button {
+        width: 100%;
+        margin: 0;
+        min-height: 48px;
+        font-size: 1rem;
+    }
+}
 </style>
 
 <div class="card">
@@ -147,9 +186,13 @@
     </div>
     <div class="card-body">
         <h3 class="h4">Your Balance: ₹{{ "%.2f"|format(user.balance) }}</h3>
-        <div class="mt-3">
-            <a href="{{ url_for('deposit') }}" class="btn btn-primary me-2 mb-2">Deposit Money</a>
-            <a href="{{ url_for('withdraw') }}" class="btn btn-secondary mb-2">Withdraw Money</a>
+        <div class="action-buttons-container">
+            <a href="{{ url_for('deposit') }}" class="btn btn-primary action-button">
+                <i class="fas fa-arrow-up"></i> Deposit Money
+            </a>
+            <a href="{{ url_for('withdraw') }}" class="btn btn-secondary action-button">
+                <i class="fas fa-arrow-down"></i> Withdraw Money
+            </a>
         </div>
     </div>
 </div>
