@@ -393,12 +393,17 @@ def deposit():
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = secure_filename(f"{timestamp}_{screenshot.filename}")
                 
-                # Create screenshots directory if it doesn't exist
-                screenshots_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots')
-                os.makedirs(screenshots_dir, exist_ok=True)
+                # Determine the correct upload directory
+                if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
+                    upload_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'uploads', 'screenshots')
+                else:
+                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'screenshots')
                 
-                # Save file with full path
-                full_path = os.path.join(screenshots_dir, filename)
+                # Create directory if it doesn't exist
+                os.makedirs(upload_dir, exist_ok=True)
+                
+                # Save file
+                full_path = os.path.join(upload_dir, filename)
                 screenshot.save(full_path)
                 logger.info(f"Saved screenshot to: {full_path}")
                 
@@ -454,12 +459,17 @@ def withdraw():
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 filename = secure_filename(f"{timestamp}_{qr_image.filename}")
                 
-                # Create qr_codes directory if it doesn't exist
-                qr_codes_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes')
-                os.makedirs(qr_codes_dir, exist_ok=True)
+                # Determine the correct upload directory
+                if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
+                    upload_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'uploads', 'qr_codes')
+                else:
+                    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'qr_codes')
                 
-                # Save file with full path
-                full_path = os.path.join(qr_codes_dir, filename)
+                # Create directory if it doesn't exist
+                os.makedirs(upload_dir, exist_ok=True)
+                
+                # Save file
+                full_path = os.path.join(upload_dir, filename)
                 qr_image.save(full_path)
                 logger.info(f"Saved QR code to: {full_path}")
                 
@@ -763,33 +773,29 @@ def serve_file(filename):
         # Clean the filename to prevent directory traversal
         filename = secure_filename(os.path.basename(filename))
         
-        # Determine the correct base directory
+        # Determine the correct base directory and file path
         if os.getenv('RAILWAY_VOLUME_MOUNT_PATH'):
             # For Railway deployment, serve from volume
-            base_dir = app.config['UPLOAD_FOLDER']
+            base_dir = os.path.join(os.getenv('RAILWAY_VOLUME_MOUNT_PATH'), 'uploads')
             logger.info(f"Serving file from Railway volume: {filename}")
         else:
             # For local development, serve from static directory
-            base_dir = 'static'
-            logger.info(f"Serving file from local static directory: {filename}")
+            base_dir = os.path.join(app.config['UPLOAD_FOLDER'])
+            logger.info(f"Serving file from local directory: {filename}")
         
         # Construct the full path
         full_path = os.path.join(base_dir, filename)
-        directory = os.path.dirname(full_path)
         
         # Check if file exists
         if not os.path.exists(full_path):
             logger.error(f"File not found: {full_path}")
             return "File not found", 404
-            
-        # Ensure the directory exists
-        os.makedirs(directory, exist_ok=True)
         
         # Log the successful file serve
         logger.info(f"Successfully serving file: {full_path}")
         
         # Send the file
-        return send_from_directory(os.path.dirname(full_path), os.path.basename(full_path))
+        return send_from_directory(base_dir, filename)
     except Exception as e:
         logger.error(f"Error serving file {filename}: {str(e)}")
         return "Error serving file", 500

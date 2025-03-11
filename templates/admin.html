@@ -883,7 +883,8 @@ function attachEventListeners() {
     document.querySelectorAll('.image-link').forEach(link => {
         link.addEventListener('click', function(e) {
             e.preventDefault();
-            showImage(this.dataset.imageUrl);
+            const imageUrl = this.getAttribute('data-image-url');
+            showImage(imageUrl);
         });
     });
 
