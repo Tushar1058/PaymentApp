@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="pendingTransactionAlert" style="display: none;" class="alert alert-warning">
+    <h4>Pending Transaction</h4>
+    <p>You have a pending transaction. Please wait for it to complete before making another request.</p>
+    <div class="progress" style="height: 25px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+             role="progressbar" style="width: 0%;" id="pendingProgress">
+            0%
+        </div>
+    </div>
+    <div class="text-center mt-3">
+        <a href="/" class="btn btn-outline-primary">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="card" id="withdrawCard">
+    <div class="card-header">
+        <h2>Withdraw Money</h2>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> Withdrawal Rules:</h5>
+            <ul class="mb-0">
+                <li>Minimum withdrawal amount: ₹10</li>
+                <li>Maximum withdrawal amount: ₹10,000</li>
+                <li>Cannot withdraw more than your current balance: ₹{{ "%.2f"|format(current_user.balance) }}</li>
+                <li>Only PNG, JPG, and JPEG files are allowed for UPI QR code</li>
+            </ul>
+        </div>
+
+        <form method="POST" enctype="multipart/form-data" id="withdrawForm" onsubmit="return validateForm()">
+            <div class="mb-3">
+                <label for="amount" class="form-label">Amount (₹)</label>
+                <input type="number" class="form-control" id="amount" name="amount" 
+                       min="10" max="10000" step="0.01" required
+                       data-balance="{{ current_user.balance }}">
+                <div class="invalid-feedback" id="amountError"></div>
+            </div>
+
+            <div class="mb-3">
+                <label for="upi_id" class="form-label">Your UPI ID</label>
+                <input type="text" class="form-control" id="upi_id" name="upi_id" required>
+                <div class="invalid-feedback" id="upiError"></div>
+            </div>
+
+            <div class="mb-3">
+                <label for="qr_code" class="form-label">Upload Your UPI QR Code</label>
+                <input type="file" class="form-control" id="qr_code" name="qr_code" accept="image/*" required>
+                <div class="invalid-feedback" id="qrError"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Submit Withdrawal Request</button>
+        </form>
+    </div>
+</div>
+
+<!-- Transaction Status -->
+<div id="transactionStatus" style="display: none;">
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Withdrawal Status</h3>
+        </div>
+        <div class="card-body">
+            <div class="progress-tracker">
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%;" id="withdrawalProgress">
+                        0%
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between">
+                        <div class="step" id="step1">
+                            <div class="step-circle bg-secondary">1</div>
+                            <div class="step-text">UPI Verification</div>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-circle bg-secondary">2</div>
+                            <div class="step-text">Payment Processing</div>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-circle bg-secondary">3</div>
+                            <div class="step-text">Completed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-3">
+                <a href="/" class="btn btn-outline-primary">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.step {
+    text-align: center;
+    flex: 1;
+}
+.step-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+}
+.step-text {
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+.step.active .step-circle {
+    background-color: #0d6efd !important;
+}
+.step.completed .step-circle {
+    background-color: #198754 !important;
+}
+</style>
+
+<script>
+function validateAmount(amount) {
+    if (!amount || isNaN(amount)) {
+        return 'Please enter a valid amount';
+    }
+    const balance = parseFloat(document.getElementById('amount').dataset.balance);
+    if (amount < 10) {
+        return 'Minimum withdrawal amount is ₹10';
+    }
+    if (amount > 10000) {
+        return 'Maximum withdrawal amount is ₹10,000';
+    }
+    if (amount > balance) {
+        return `Insufficient balance. Your current balance is ₹${balance.toFixed(2)}`;
+    }
+    return null;
+}
+
+function validateUpiId(upiId) {
+    if (!upiId || upiId.trim().length < 5) {
+        return 'Please enter a valid UPI ID';
+    }
+    if (!upiId.includes('@')) {
+        return 'UPI ID must contain @ symbol';
+    }
+    return null;
+}
+
+function validateQrCode(file) {
+    if (!file) {
+        return 'Please select a UPI QR code';
+    }
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+        return 'Only PNG, JPG, and JPEG files are allowed';
+    }
+    return null;
+}
+
+function validateForm() {
+    const amount = parseFloat(document.getElementById('amount').value);
+    const upiId = document.getElementById('upi_id').value;
+    const qrCode = document.getElementById('qr_code').files[0];
+    
+    const amountError = validateAmount(amount);
+    const upiError = validateUpiId(upiId);
+    const qrError = validateQrCode(qrCode);
+    
+    let isValid = true;
+    
+    if (amountError) {
+        document.getElementById('amount').classList.add('is-invalid');
+        document.getElementById('amountError').textContent = amountError;
+        isValid = false;
+    } else {
+        document.getElementById('amount').classList.remove('is-invalid');
+    }
+    
+    if (upiError) {
+        document.getElementById('upi_id').classList.add('is-invalid');
+        document.getElementById('upiError').textContent = upiError;
+        isValid = false;
+    } else {
+        document.getElementById('upi_id').classList.remove('is-invalid');
+    }
+    
+    if (qrError) {
+        document.getElementById('qr_code').classList.add('is-invalid');
+        document.getElementById('qrError').textContent = qrError;
+        isValid = false;
+    } else {
+        document.getElementById('qr_code').classList.remove('is-invalid');
+    }
+    
+    return isValid;
+}
+
+// Check for pending transactions before allowing new ones
+async function checkPendingTransactions() {
+    try {
+        const response = await fetch('/get_transaction_status/latest');
+        const data = await response.json();
+        
+        if (data.has_pending) {
+            document.getElementById('withdrawCard').style.display = 'none';
+            document.getElementById('pendingTransactionAlert').style.display = 'block';
+            if (data.transaction) {
+                updateWithdrawalStatus(data.transaction.id, true);
+            }
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error checking pending transactions:', error);
+        return false;
+    }
+}
+
+// Function to update withdrawal status
+function updateWithdrawalStatus(transactionId, isExisting = false) {
+    fetch(`/get_transaction_status/${transactionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) return;
+
+            let progress = 0;
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+            const step3 = document.getElementById('step3');
+            const progressBar = document.getElementById('withdrawalProgress');
+            
+            // Reset steps
+            [step1, step2, step3].forEach(step => {
+                step.classList.remove('active', 'completed');
+                step.querySelector('.step-circle').classList.remove('bg-primary', 'bg-success');
+                step.querySelector('.step-circle').classList.add('bg-secondary');
+            });
+
+            // Update progress based on status
+            if (data.upi_approved) {
+                progress = 33;
+                step1.classList.add('completed');
+                step2.classList.add('active');
+                progressBar.textContent = 'UPI Verified';
+            } else {
+                step1.classList.add('active');
+                progressBar.textContent = 'Waiting for UPI Verification';
+            }
+
+            if (data.payment_done) {
+                progress = 66;
+                step2.classList.add('completed');
+                step3.classList.add('active');
+                progressBar.textContent = 'Payment Processing';
+            }
+
+            if (data.status === 'approved') {
+                progress = 100;
+                [step1, step2, step3].forEach(step => step.classList.add('completed'));
+                progressBar.textContent = 'Completed';
+                progressBar.classList.remove('progress-bar-animated');
+                // Redirect to dashboard after a short delay
+                setTimeout(() => window.location.href = '/', 1500);
+            } else if (data.status === 'rejected') {
+                progressBar.style.width = '100%';
+                progressBar.textContent = 'Rejected';
+                progressBar.classList.remove('progress-bar-animated', 'bg-primary');
+                progressBar.classList.add('bg-danger');
+                setTimeout(() => window.location.href = '/', 1500);
+            }
+
+            // Update progress bar
+            progressBar.style.width = `${progress}%`;
+
+            // If this is an existing transaction, show the status tracker
+            if (isExisting) {
+                document.getElementById('withdrawForm').style.display = 'none';
+                document.getElementById('transactionStatus').style.display = 'block';
+            }
+        });
+}
+
+// Check for pending transactions on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    const hasPending = await checkPendingTransactions();
+    if (!hasPending) {
+        // Check URL for transaction ID
+        const urlParams = new URLSearchParams(window.location.search);
+        const transactionId = urlParams.get('transaction_id');
+        
+        if (transactionId) {
+            document.getElementById('withdrawForm').style.display = 'none';
+            document.getElementById('transactionStatus').style.display = 'block';
+            // Initial update
+            updateWithdrawalStatus(transactionId, true);
+            // Auto-update every 5 seconds
+            setInterval(() => updateWithdrawalStatus(transactionId), 5000);
+        }
+    }
+});
+
+// Handle form submission
+document.getElementById('withdrawForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch('/withdraw', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text())
+    .then(html => {
+        const match = html.match(/transaction-(\d+)/);
+        if (match) {
+            const transactionId = match[1];
+            // Update URL without reloading
+            window.history.pushState({}, '', `/withdraw?transaction_id=${transactionId}`);
+            // Show status tracker
+            document.getElementById('withdrawForm').style.display = 'none';
+            document.getElementById('transactionStatus').style.display = 'block';
+            // Start checking status
+            updateWithdrawalStatus(transactionId);
+            setInterval(() => updateWithdrawalStatus(transactionId), 5000);
+        }
+    });
+});
+</script>
+{% endblock %} 

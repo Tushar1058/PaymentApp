@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet System</title>
+    <!-- Preload critical resources -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" as="style">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" as="style">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Prevent FOUC (Flash of Unstyled Content) -->
+    <script>
+        // Immediately set theme from localStorage to prevent flicker
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+    </script>
+    
+    <style>
+        :root {
+            /* Light theme variables */
+            --primary-yellow: #FFD700;
+            --secondary-yellow: #FFC107;
+            --primary-grey: #343a40;
+            --secondary-grey: #6c757d;
+            --blur-bg: rgba(255, 255, 255, 0.9);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #343a40;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --body-bg: #212529;
+        }
+
+        [data-bs-theme="dark"] {
+            /* Dark theme variables */
+            --primary-yellow: #FFC107;
+            --secondary-yellow: #FFD700;
+            --primary-grey: #212529;
+            --secondary-grey: #343a40;
+            --blur-bg: rgba(33, 37, 41, 0.9);
+            --card-bg: rgba(33, 37, 41, 0.95);
+            --text-color: #fff;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --body-bg: #212529;
+        }
+
+        [data-bs-theme="light"] {
+            --body-bg: #ffffff;
+            --text-color: #212529;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--body-bg) !important;
+            color: var(--text-color);
+            transition: background 0.3s ease;
+        }
+
+        .navbar {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: var(--blur-bg) !important;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .container { 
+            max-width: 1200px; 
+            margin-top: 2rem; 
+            padding: 0 1rem;
+        }
+
+        .card { 
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            border-radius: 15px;
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-yellow);
+            border-color: var(--primary-yellow);
+            color: var(--primary-grey);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--secondary-yellow);
+            border-color: var(--secondary-yellow);
+            color: var(--primary-grey);
+        }
+
+        .btn-outline-primary {
+            border-color: var(--primary-yellow);
+            color: var(--primary-yellow);
+        }
+
+        .btn-outline-primary:hover {
+            background-color: var(--primary-yellow);
+            border-color: var(--primary-yellow);
+            color: var(--primary-grey);
+        }
+
+        .transaction-image { 
+            max-width: 200px; 
+            border-radius: 10px;
+        }
+
+        .transaction-link { 
+            color: var(--primary-yellow);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .transaction-link:hover {
+            color: var(--secondary-yellow);
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .modal-image { 
+            max-width: 100%; 
+            height: auto;
+            border-radius: 10px;
+        }
+
+        .btn {
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .form-control {
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--primary-yellow);
+            box-shadow: 0 0 0 0.25rem rgba(255, 215, 0, 0.25);
+        }
+
+        .progress {
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: var(--secondary-grey);
+        }
+
+        .progress-bar {
+            background-color: var(--primary-yellow);
+            color: var(--primary-grey);
+        }
+
+        .alert {
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+        }
+
+        .theme-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            margin-left: 1rem;
+        }
+
+        .theme-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--secondary-grey);
+            transition: .4s;
+            border-radius: 30px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: var(--primary-yellow);
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-grey);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(30px);
+        }
+
+        .nav-link {
+            position: relative;
+            padding: 0.5rem 1rem;
+            margin: 0 0.2rem;
+            color: var(--text-color) !important;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 50%;
+            background-color: var(--primary-yellow);
+            transition: all 0.3s ease;
+            transform: translateX(-50%);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--text-color) !important;
+        }
+
+        table {
+            background: transparent !important;
+        }
+
+        [data-bs-theme="dark"] .table {
+            color: var(--text-color);
+        }
+
+        /* Optimize transitions */
+        * {
+            transition-property: background-color, border-color, color, box-shadow;
+            transition-duration: 0.3s;
+            transition-timing-function: ease;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-wallet me-2"></i>Wallet System
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav me-auto">
+                    {% if current_user.is_authenticated %}
+                        {% if current_user.is_admin %}
+                            <a class="nav-link" href="/admin">
+                                <i class="fas fa-user-shield me-1"></i>Admin Panel
+                            </a>
+                        {% else %}
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-home me-1"></i>Dashboard
+                            </a>
+                        {% endif %}
+                        <a class="nav-link" href="/logout">
+                            <i class="fas fa-sign-out-alt me-1"></i>Logout
+                        </a>
+                    {% else %}
+                        <a class="nav-link" href="/login">
+                            <i class="fas fa-sign-in-alt me-1"></i>Login
+                        </a>
+                        <a class="nav-link" href="/register">
+                            <i class="fas fa-user-plus me-1"></i>Register
+                        </a>
+                    {% endif %}
+                </div>
+                <label class="theme-switch">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Transaction Proof</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="modalImage" src="" class="modal-image" alt="Transaction proof">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('theme-toggle');
+        const html = document.documentElement;
+        
+        // Set initial state of toggle based on current theme
+        themeToggle.checked = html.getAttribute('data-bs-theme') === 'dark';
+        
+        themeToggle.addEventListener('change', function() {
+            const theme = this.checked ? 'dark' : 'light';
+            html.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('theme', theme);
+        });
+    </script>
+</body>
+</html> 

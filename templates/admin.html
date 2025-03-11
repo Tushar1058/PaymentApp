@@ -1,0 +1,886 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- UPI Settings Card -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="h3 mb-0">UPI Settings</h2>
+        <button class="btn btn-outline-primary" onclick="toggleUPIEdit()">
+            <i class="fas fa-edit"></i> Edit
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="currentSettings">
+            <p class="mb-2"><strong>UPI ID:</strong> <span id="currentUpiId"></span></p>
+            <p class="mb-0"><strong>Name:</strong> <span id="currentName"></span></p>
+        </div>
+        <form id="upiForm" style="display: none;" action="{{ url_for('update_upi_settings') }}" method="post">
+            <div class="mb-3">
+                <label for="upi_id" class="form-label">UPI ID</label>
+                <input type="text" class="form-control" id="upi_id" name="upi_id" required>
+            </div>
+            <div class="mb-3">
+                <label for="name" class="form-label">Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleUPIEdit()">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<!-- Pending Transactions Card -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="h3 mb-0">Pending Transactions</h2>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary refresh-btn" onclick="refreshPendingTransactions()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>UPI ID</th>
+                        <th>Proof</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="pendingTransactionsBody">
+                    {% for transaction in transactions %}
+                    {% if transaction.status == 'pending' %}
+                    <tr id="transaction-{{ transaction.id }}" class="transaction-row">
+                        <td class="text-nowrap">{{ transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ transaction.user.username }}</td>
+                        <td>{{ transaction.type.capitalize() }}</td>
+                        <td class="text-nowrap">₹{{ "%.2f"|format(transaction.amount) }}</td>
+                        <td>{{ transaction.upi_id if transaction.upi_id else 'N/A' }}</td>
+                        <td>
+                            {% if transaction.screenshot %}
+                            <button class="btn btn-sm btn-link image-link" 
+                                    data-image-url="{{ url_for('static', filename=transaction.screenshot.split('static/')[-1]) }}">
+                                View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
+                            </button>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 20px; min-width: 100px;">
+                                <div class="progress-bar" role="progressbar" style="width: 0%;" 
+                                     data-transaction="{{ transaction.id }}">0%</div>
+                            </div>
+                        </td>
+                        <td class="action-buttons" data-transaction="{{ transaction.id }}">
+                            {% if transaction.type == 'withdrawal' %}
+                                {% if not transaction.upi_approved %}
+                                <button class="btn btn-info btn-sm mb-1 approve-upi" 
+                                        data-transaction="{{ transaction.id }}">
+                                    <i class="fas fa-check-circle"></i> UPI
+                                </button>
+                                {% endif %}
+                                {% if transaction.upi_approved and not transaction.payment_done %}
+                                <button class="btn btn-success btn-sm mb-1 mark-paid" 
+                                        data-transaction="{{ transaction.id }}">
+                                    <i class="fas fa-money-bill-wave"></i> Paid
+                                </button>
+                                {% endif %}
+                            {% else %}
+                            <a href="{{ url_for('approve_transaction', transaction_id=transaction.id) }}" 
+                               class="btn btn-success btn-sm mb-1">
+                                <i class="fas fa-check"></i> Approve
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('reject_transaction', transaction_id=transaction.id) }}" 
+                               class="btn btn-danger btn-sm mb-1">
+                                <i class="fas fa-times"></i> Reject
+                            </a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction History Card -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+        <h2 class="h3 mb-0">Transaction History</h2>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-danger btn-sm" onclick="clearTransactionHistory()" style="font-size: 0.8rem; padding: 0.25rem 0.5rem;">
+                <i class="fas fa-trash"></i> Clear
+            </button>
+            <div class="pagination-controls">
+                <button class="btn btn-sm btn-outline-primary" id="historyPrevPage" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span id="historyPageInfo" class="fw-bold">Page 1 of 1</span>
+                <button class="btn btn-sm btn-outline-primary" id="historyNextPage">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-container">
+            <div class="table-overlay">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>User</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>UPI ID</th>
+                            <th>Proof</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionHistoryBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Transaction Proof</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" class="img-fluid" style="max-height: 80vh;" alt="Transaction proof">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Transaction</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="rejectForm">
+                    <input type="hidden" id="rejectTransactionId" name="transaction_id">
+                    <div class="mb-3">
+                        <label for="rejectionReason" class="form-label">Rejection Reason</label>
+                        <textarea class="form-control" id="rejectionReason" name="reason" rows="3" required></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Reject Transaction</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+[data-bs-theme="light"] body {
+    background: #f8f9fa !important;
+}
+
+[data-bs-theme="light"] .card {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+[data-bs-theme="light"] .table {
+    color: #212529;
+}
+
+.refresh-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+[data-bs-theme="light"] .table-overlay {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+[data-bs-theme="light"] .table-overlay .spinner-border {
+    color: #0d6efd;
+}
+
+.table-responsive {
+    margin: 0 -1rem;
+    padding: 0 1rem;
+    width: calc(100% + 2rem);
+}
+
+.card-header .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pagination-controls .btn {
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.pagination-controls #historyPageInfo {
+    min-width: 80px;
+    text-align: center;
+    margin: 0 0.5rem;
+}
+
+.table-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.table-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+}
+
+.table-overlay.loading {
+    display: flex;
+}
+
+@media (max-width: 768px) {
+    .card-header {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .card-header .btn {
+        width: auto;
+        margin: 0;
+    }
+    
+    .card-header .pagination-controls {
+        width: auto;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    
+    .pagination-controls .btn {
+        min-width: 36px;
+        width: 36px;
+        height: 36px;
+        font-size: 0.9rem;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .pagination-controls #historyPageInfo {
+        min-width: 100px;
+        text-align: center;
+        margin: 0 0.5rem;
+    }
+    
+    .table td, .table th {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .table td:last-child {
+        min-width: 120px;
+    }
+    
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+        margin: 0.1rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .image-link {
+        font-size: 0.9rem;
+    }
+}
+
+.modal-backdrop {
+    opacity: 0.5;
+}
+
+.img-fluid {
+    max-width: 100%;
+    height: auto;
+}
+
+.btn-link {
+    text-decoration: none;
+    padding: 0;
+}
+
+.btn-link:hover {
+    text-decoration: underline;
+}
+</style>
+
+<script>
+// Add these variables at the top of your script
+const itemsPerPage = 10;
+let currentHistoryPage = 1;
+let allHistoryTransactions = [];
+let isUpdating = false;
+
+function toggleUPIEdit() {
+    const form = document.getElementById('upiForm');
+    const currentSettings = document.getElementById('currentSettings');
+    
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+        currentSettings.style.display = 'none';
+    } else {
+        form.style.display = 'none';
+        currentSettings.style.display = 'block';
+    }
+}
+
+function updateUPISettingsDisplay() {
+    fetch('/get_upi_settings')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.error) {
+                document.getElementById('currentUpiId').textContent = data.upi_id;
+                document.getElementById('currentName').textContent = data.name;
+            }
+        });
+}
+
+function showImage(url) {
+    const modalElement = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const modal = new bootstrap.Modal(modalElement);
+    
+    // Set image source
+    modalImage.src = url;
+    
+    // Show modal
+    modal.show();
+    
+    // Clear modal content when hidden
+    modalElement.addEventListener('hidden.bs.modal', function() {
+        modalImage.src = '';
+        document.body.classList.remove('modal-open');
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
+    }, { once: true }); // Use once: true to prevent multiple event listeners
+}
+
+// Function to update transaction buttons
+function updateTransactionButtons(transactionId, data) {
+    const actionCell = document.querySelector(`.action-buttons[data-transaction="${transactionId}"]`);
+    if (!actionCell) return;
+
+    // Clear existing buttons
+    actionCell.innerHTML = '';
+
+    if (data.type === 'withdrawal') {
+        if (!data.upi_approved) {
+            actionCell.innerHTML += `
+                <button class="btn btn-info btn-sm approve-upi" data-transaction="${transactionId}">
+                    Approve UPI
+                </button>`;
+        } else if (!data.payment_done) {
+            actionCell.innerHTML += `
+                <button class="btn btn-success btn-sm mark-paid" data-transaction="${transactionId}">
+                    Mark Paid
+                </button>`;
+        }
+    } else {
+        actionCell.innerHTML += `
+            <a href="/approve_transaction/${transactionId}" class="btn btn-success btn-sm">Approve</a>`;
+    }
+    
+    actionCell.innerHTML += `
+        <a href="/reject_transaction/${transactionId}" class="btn btn-danger btn-sm">Reject</a>`;
+
+    // Reattach event listeners
+    attachButtonListeners(actionCell);
+}
+
+// Function to update transaction status
+function updateTransactionStatus(transactionId) {
+    fetch(`/get_transaction_status/${transactionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) return;
+            
+            const progressBar = document.querySelector(`.progress-bar[data-transaction="${transactionId}"]`);
+            if (!progressBar) return;
+
+            let progress = 0;
+            if (data.upi_approved) progress += 50;
+            if (data.payment_done) progress += 50;
+            
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
+            
+            // Update buttons
+            updateTransactionButtons(transactionId, data);
+            
+            // Remove from pending if completed
+            if (data.status === 'approved' || data.status === 'rejected') {
+                const row = document.getElementById(`transaction-${transactionId}`);
+                if (row) {
+                    row.remove();
+                    updateTransactionHistory();
+                }
+            }
+        });
+}
+
+// Modify updateTransactionHistory function
+function updateTransactionHistory() {
+    if (isUpdating) return;
+    isUpdating = true;
+    
+    const overlay = document.querySelector('.table-overlay');
+    overlay.classList.add('loading');
+    
+    fetch('/get_all_transactions')
+        .then(response => response.json())
+        .then(data => {
+            allHistoryTransactions = data.transactions;
+            displayHistoryTransactions(currentHistoryPage);
+            overlay.classList.remove('loading');
+            isUpdating = false;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            overlay.classList.remove('loading');
+            isUpdating = false;
+        });
+}
+
+// Add displayHistoryTransactions function
+function displayHistoryTransactions(page) {
+    const start = (page - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const transactionsToShow = allHistoryTransactions.slice(start, end);
+    const totalPages = Math.ceil(allHistoryTransactions.length / itemsPerPage);
+    
+    const tbody = document.getElementById('transactionHistoryBody');
+    tbody.innerHTML = '';
+    
+    transactionsToShow.forEach(transaction => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${new Date(transaction.timestamp).toLocaleString()}</td>
+            <td>${transaction.username}</td>
+            <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+            <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
+            <td>
+                <span class="badge ${
+                    transaction.status === 'approved' ? 'bg-success' : 
+                    transaction.status === 'rejected' ? 'bg-danger' : 'bg-warning'
+                }">
+                    ${transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                </span>
+            </td>
+            <td>${transaction.upi_id || 'N/A'}</td>
+            <td>
+                ${transaction.screenshot ? `
+                    <a href="#" 
+                       class="transaction-link image-link" 
+                       data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                        View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
+                    </a>
+                ` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+    
+    // Update pagination controls
+    document.getElementById('historyPrevPage').disabled = page === 1;
+    document.getElementById('historyNextPage').disabled = page >= totalPages;
+    document.getElementById('historyPageInfo').textContent = `Page ${page} of ${totalPages}`;
+    
+    // Reattach image link listeners
+    tbody.querySelectorAll('.image-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            showImage(this.dataset.imageUrl);
+        });
+    });
+}
+
+// Add pagination event listeners
+document.getElementById('historyPrevPage').addEventListener('click', () => {
+    if (currentHistoryPage > 1) {
+        currentHistoryPage--;
+        displayHistoryTransactions(currentHistoryPage);
+    }
+});
+
+document.getElementById('historyNextPage').addEventListener('click', () => {
+    const totalPages = Math.ceil(allHistoryTransactions.length / itemsPerPage);
+    if (currentHistoryPage < totalPages) {
+        currentHistoryPage++;
+        displayHistoryTransactions(currentHistoryPage);
+    }
+});
+
+// Optimize the auto-update interval
+let updateTimeout;
+function scheduleUpdate() {
+    if (updateTimeout) {
+        clearTimeout(updateTimeout);
+    }
+    updateTimeout = setTimeout(() => {
+        if (!document.hidden) {
+            updatePendingTransactions();
+            updateTransactionHistory();
+            updateUPISettingsDisplay();
+        }
+        scheduleUpdate();
+    }, 30000);
+}
+
+// Handle visibility changes
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        updatePendingTransactions();
+        updateTransactionHistory();
+        updateUPISettingsDisplay();
+    }
+});
+
+// Function to update pending transactions
+function updatePendingTransactions() {
+    fetch('/get_pending_transactions')
+        .then(response => response.json())
+        .then(data => {
+            const pendingBody = document.getElementById('pendingTransactionsBody');
+            pendingBody.innerHTML = data.transactions.map(transaction => {
+                // Calculate progress based on transaction type and status
+                let progress = 0;
+                if (transaction.type === 'withdrawal') {
+                    if (transaction.upi_approved) progress += 50;
+                    if (transaction.payment_done) progress += 50;
+                } else {
+                    progress = transaction.status === 'pending' ? 50 : 100;
+                }
+
+                return `
+                <tr id="transaction-${transaction.id}">
+                    <td>${new Date(transaction.timestamp).toLocaleString()}</td>
+                    <td>${transaction.username}</td>
+                    <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+                    <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
+                    <td>${transaction.upi_id || 'N/A'}</td>
+                    <td>
+                        ${transaction.screenshot ? `
+                            <button class="btn btn-sm btn-link image-link" 
+                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                                View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
+                            </button>
+                        ` : ''}
+                    </td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" 
+                                 style="width: ${progress}%;" 
+                                 data-transaction="${transaction.id}">
+                                 ${progress}%
+                            </div>
+                        </div>
+                    </td>
+                    <td class="action-buttons" data-transaction="${transaction.id}">
+                        ${transaction.type === 'withdrawal' ? 
+                            (!transaction.upi_approved ? `
+                                <button class="btn btn-info btn-sm approve-upi" data-transaction="${transaction.id}">
+                                    <i class="fas fa-check-circle"></i> UPI
+                                </button>
+                            ` : !transaction.payment_done ? `
+                                <button class="btn btn-success btn-sm mark-paid" data-transaction="${transaction.id}">
+                                    <i class="fas fa-check"></i> Mark Paid
+                                </button>
+                            ` : '') : `
+                            <a href="/approve_transaction/${transaction.id}" class="btn btn-success btn-sm">
+                                <i class="fas fa-check"></i> Approve
+                            </a>
+                        `}
+                        <button class="btn btn-danger btn-sm reject-btn" data-transaction="${transaction.id}">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+
+            // Reattach event listeners
+            attachEventListeners();
+        });
+}
+
+function attachButtonListeners(container) {
+    // UPI Approval button handler
+    container.querySelectorAll('.approve-upi').forEach(button => {
+        button.addEventListener('click', function() {
+            const transactionId = this.dataset.transaction;
+            fetch(`/approve_upi/${transactionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateTransactionStatus(transactionId);
+                    }
+                });
+        });
+    });
+    
+    // Mark Paid button handler
+    container.querySelectorAll('.mark-paid').forEach(button => {
+        button.addEventListener('click', function() {
+            const transactionId = this.dataset.transaction;
+            fetch(`/mark_payment_done/${transactionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateTransactionStatus(transactionId);
+                    }
+                });
+        });
+    });
+    
+    // New Reject button handler
+    container.querySelectorAll('a[href*="reject_transaction"]').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const transactionId = this.href.split('/').pop();
+            showRejectModal(transactionId);
+        });
+    });
+}
+
+function showRejectModal(transactionId) {
+    const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+    document.getElementById('rejectTransactionId').value = transactionId;
+    document.getElementById('rejectionReason').value = '';
+    modal.show();
+}
+
+// Handle reject form submission
+document.getElementById('rejectForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const transactionId = document.getElementById('rejectTransactionId').value;
+    const reason = document.getElementById('rejectionReason').value;
+    
+    fetch(`/reject_transaction/${transactionId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: reason })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            bootstrap.Modal.getInstance(document.getElementById('rejectModal')).hide();
+            updatePendingTransactions();
+            updateTransactionHistory();
+        } else {
+            alert('Error rejecting transaction: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error rejecting transaction');
+    });
+});
+
+// Set up event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial updates
+    updatePendingTransactions();
+    updateTransactionHistory();
+    updateUPISettingsDisplay();
+    
+    // Start the update schedule
+    scheduleUpdate();
+});
+
+function refreshPendingTransactions() {
+    const refreshBtn = document.querySelector('.refresh-btn');
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+    
+    Promise.all([
+        fetch('/get_pending_transactions').then(res => res.json()),
+        fetch('/get_all_transactions').then(res => res.json())
+    ])
+    .then(([pendingData, allData]) => {
+        // Update pending transactions
+        const pendingBody = document.getElementById('pendingTransactionsBody');
+        pendingBody.innerHTML = pendingData.transactions.map(transaction => {
+            // Calculate progress based on transaction type and status
+            let progress = 0;
+            if (transaction.type === 'withdrawal') {
+                if (transaction.upi_approved) progress += 50;
+                if (transaction.payment_done) progress += 50;
+            } else {
+                progress = transaction.status === 'pending' ? 50 : 100;
+            }
+
+            return `
+                <tr id="transaction-${transaction.id}">
+                    <td>${new Date(transaction.timestamp).toLocaleString()}</td>
+                    <td>${transaction.username}</td>
+                    <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+                    <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
+                    <td>${transaction.upi_id || 'N/A'}</td>
+                    <td>
+                        ${transaction.screenshot ? `
+                            <button class="btn btn-sm btn-link image-link" 
+                                    data-image-url="/static/${transaction.screenshot.split('static/')[1]}">
+                                View ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
+                            </button>
+                        ` : ''}
+                    </td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" 
+                                 style="width: ${progress}%;" 
+                                 data-transaction="${transaction.id}">
+                                 ${progress}%
+                            </div>
+                        </div>
+                    </td>
+                    <td class="action-buttons" data-transaction="${transaction.id}">
+                        ${transaction.type === 'withdrawal' ? 
+                            (!transaction.upi_approved ? `
+                                <button class="btn btn-info btn-sm approve-upi" data-transaction="${transaction.id}">
+                                    <i class="fas fa-check-circle"></i> UPI
+                                </button>
+                            ` : !transaction.payment_done ? `
+                                <button class="btn btn-success btn-sm mark-paid" data-transaction="${transaction.id}">
+                                    <i class="fas fa-check"></i> Mark Paid
+                                </button>
+                            ` : '') : `
+                            <a href="/approve_transaction/${transaction.id}" class="btn btn-success btn-sm">
+                                <i class="fas fa-check"></i> Approve
+                            </a>
+                        `}
+                        <button class="btn btn-danger btn-sm reject-btn" data-transaction="${transaction.id}">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Update transaction history
+        allHistoryTransactions = allData.transactions;
+        displayHistoryTransactions(currentHistoryPage);
+
+        // Reattach event listeners
+        attachEventListeners();
+    })
+    .finally(() => {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    });
+}
+
+function clearTransactionHistory() {
+    if (!confirm('Are you sure you want to clear all completed transactions? This action cannot be undone.')) {
+        return;
+    }
+
+    fetch('/clear_transaction_history', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateTransactionHistory();
+            alert('Transaction history cleared successfully');
+        } else {
+            alert('Error clearing transaction history: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error clearing transaction history');
+    });
+}
+
+function attachEventListeners() {
+    // Attach image link listeners
+    document.querySelectorAll('.image-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            showImage(this.dataset.imageUrl);
+        });
+    });
+
+    // Attach action button listeners
+    document.querySelectorAll('.action-buttons').forEach(attachButtonListeners);
+
+    // Attach reject button listeners
+    document.querySelectorAll('.reject-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const transactionId = this.dataset.transaction;
+            showRejectModal(transactionId);
+        });
+    });
+}
+
+// Update the DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // Initial load
+    refreshPendingTransactions();
+    updateUPISettingsDisplay();
+    
+    // Start the update schedule with a longer interval
+    setInterval(refreshPendingTransactions, 60000); // Check every minute
+});
+</script>
+{% endblock %} 

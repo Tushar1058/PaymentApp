@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+.transaction-row-pending {
+    cursor: pointer;
+}
+
+.transaction-row-rejected {
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        width: auto;
+        min-width: 120px;
+        margin: 0.25rem;
+        touch-action: manipulation;
+    }
+    
+    .card-header .btn {
+        width: auto;
+        min-width: 120px;
+    }
+    
+    .table td, .table th {
+        padding: 0.75rem;
+    }
+    
+    .badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+    }
+}
+
+.card-header .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.pagination-controls .btn {
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+.pagination-controls #pageInfo {
+    min-width: 80px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .card-header {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .card-header .pagination-controls {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .pagination-controls .btn {
+        min-width: 36px;
+        height: 36px;
+        font-size: 0.9rem;
+    }
+    
+    .table td, .table th {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+    
+    .progress {
+        min-width: 80px !important;
+    }
+}
+
+/* Light mode specific styles */
+[data-bs-theme="light"] .card {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="light"] .table {
+    color: #343a40;
+}
+
+[data-bs-theme="light"] .modal-content {
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+[data-bs-theme="light"] .alert-danger {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+/* Modal styles */
+.modal-backdrop {
+    opacity: 0.5 !important;
+}
+
+.modal-open {
+    padding-right: 0 !important;
+    overflow: auto !important;
+}
+
+.modal {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 1rem 1.5rem;
+}
+</style>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="h3 mb-0">Welcome, {{ user.username }}</h2>
+        <button class="btn btn-outline-primary" onclick="refreshPage()">
+            <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body">
+        <h3 class="h4">Your Balance: ₹{{ "%.2f"|format(user.balance) }}</h3>
+        <div class="mt-3">
+            <a href="{{ url_for('deposit') }}" class="btn btn-primary me-2 mb-2">Deposit Money</a>
+            <a href="{{ url_for('withdraw') }}" class="btn btn-secondary mb-2">Withdraw Money</a>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+        <h3 class="h4 mb-0">Recent Transactions</h3>
+        <div class="pagination-controls">
+            <button class="btn btn-sm btn-outline-primary" id="prevPage" disabled>
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <span id="pageInfo" class="fw-bold">Page 1 of 1</span>
+            <button class="btn btn-sm btn-outline-primary" id="nextPage">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                    </tr>
+                </thead>
+                <tbody id="transactionsBody">
+                    {% for transaction in transactions %}
+                    <tr id="transaction-{{ transaction.id }}" 
+                        class="{% if transaction.status == 'pending' %}transaction-row transaction-row-pending{% elif transaction.status == 'rejected' %}transaction-row transaction-row-rejected{% endif %}" 
+                        data-transaction-id="{{ transaction.id }}" 
+                        data-type="{{ transaction.type }}"
+                        data-rejection-reason="{{ transaction.rejection_reason if transaction.rejection_reason else '' }}">
+                        <td class="text-nowrap">{{ transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td>{{ transaction.type.capitalize() }}</td>
+                        <td>₹{{ "%.2f"|format(transaction.amount) }}</td>
+                        <td>
+                            {% if transaction.status == 'approved' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-check"></i> Approved
+                                </span>
+                            {% elif transaction.status == 'rejected' %}
+                                <span class="badge bg-danger transaction-status" 
+                                      data-bs-toggle="tooltip" 
+                                      data-bs-placement="top" 
+                                      title="Click for details">
+                                    <i class="fas fa-times"></i> Rejected
+                                </span>
+                            {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-clock"></i> Pending
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if transaction.status == 'approved' %}
+                                <div class="text-center">
+                                    <i class="fas fa-check-circle text-success" style="font-size: 24px;"></i>
+                                </div>
+                            {% elif transaction.status == 'rejected' %}
+                                <div class="text-center rejected-reason" style="cursor: pointer;">
+                                    <i class="fas fa-exclamation-circle text-danger" style="font-size: 24px;"></i>
+                                </div>
+                            {% elif transaction.status == 'pending' %}
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%;" 
+                                         data-transaction="{{ transaction.id }}">
+                                        Pending
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Reason Modal -->
+<div class="modal fade" id="rejectionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Transaction Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="rejectionReason">This transaction was rejected. Please contact support for more information or create a new transaction request.</span>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="/deposit" class="btn btn-primary me-2">New Deposit Request</a>
+                    <a href="/withdraw" class="btn btn-primary">New Withdrawal Request</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.step {
+    text-align: center;
+    flex: 1;
+}
+.step-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+}
+.step-text {
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+.step.active .step-circle {
+    background-color: #0d6efd !important;
+}
+.step.completed .step-circle {
+    background-color: #198754 !important;
+}
+</style>
+
+<script>
+function refreshPage() {
+    location.reload();
+}
+
+let currentTransactionId = null;
+let updateInterval = null;
+let currentPage = 1;
+const itemsPerPage = 10;
+let allTransactions = [];
+
+// Function to update transaction status
+function updateTransactionStatus(transactionId) {
+    fetch(`/get_transaction_status/${transactionId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) return;
+            
+            const row = document.getElementById(`transaction-${transactionId}`);
+            if (!row) return;
+            
+            const statusCell = row.querySelector('.badge');
+            const progressCell = row.querySelector('td:last-child');
+            
+            // Update progress bar in list view
+            const listProgressBar = row.querySelector('.progress-bar');
+            if (listProgressBar && data.type === 'withdrawal') {
+                let progress = 0;
+                if (data.upi_approved) progress += 50;
+                if (data.payment_done) progress += 50;
+                listProgressBar.style.width = `${progress}%`;
+                listProgressBar.textContent = `${progress}%`;
+            }
+            
+            if (data.status === 'approved') {
+                statusCell.className = 'badge bg-success';
+                statusCell.innerHTML = '<i class="fas fa-check"></i> Approved';
+                progressCell.innerHTML = '<div class="text-center"><i class="fas fa-check-circle text-success" style="font-size: 24px;"></i></div>';
+                setTimeout(() => location.reload(), 1500);
+            } else if (data.status === 'rejected') {
+                statusCell.className = 'badge bg-danger';
+                statusCell.innerHTML = '<i class="fas fa-times"></i> Rejected';
+                progressCell.innerHTML = '<div class="text-center rejected-reason" style="cursor: pointer;"><i class="fas fa-exclamation-circle text-danger" style="font-size: 24px;"></i></div>';
+                row.dataset.rejectionReason = data.rejection_reason || '';
+                
+                // Reattach event listener
+                progressCell.querySelector('.rejected-reason').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    showRejectionModal(row.dataset.rejectionReason, row.dataset.type);
+                });
+            }
+
+            // Update modal if open
+            if (currentTransactionId === transactionId) {
+                updateModalProgress(data);
+            }
+        });
+}
+
+function updateModalProgress(data) {
+    if (data.type === 'withdrawal') {
+        const step1 = document.getElementById('modalStep1');
+        const step2 = document.getElementById('modalStep2');
+        const step3 = document.getElementById('modalStep3');
+        const progressBar = document.getElementById('modalProgressBar');
+        
+        let progress = 0;
+        
+        // Reset steps
+        [step1, step2, step3].forEach(step => {
+            step.classList.remove('active', 'completed');
+            step.querySelector('.step-circle').classList.remove('bg-primary', 'bg-success');
+            step.querySelector('.step-circle').classList.add('bg-secondary');
+        });
+
+        if (data.upi_approved) {
+            progress = 33;
+            step1.classList.add('completed');
+            step2.classList.add('active');
+            progressBar.textContent = 'UPI Verified';
+        } else {
+            step1.classList.add('active');
+            progressBar.textContent = 'Waiting for UPI Verification';
+        }
+
+        if (data.payment_done) {
+            progress = 66;
+            step2.classList.add('completed');
+            step3.classList.add('active');
+            progressBar.textContent = 'Payment Processing';
+        }
+
+        if (data.status === 'approved') {
+            progress = 100;
+            [step1, step2, step3].forEach(step => step.classList.add('completed'));
+            progressBar.textContent = 'Completed';
+            progressBar.classList.remove('progress-bar-animated');
+        } else if (data.status === 'rejected') {
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Rejected';
+            progressBar.classList.remove('progress-bar-animated', 'bg-primary');
+            progressBar.classList.add('bg-danger');
+        }
+
+        progressBar.style.width = `${progress}%`;
+    } else {
+        const progressBar = document.getElementById('modalDepositBar');
+        if (data.status === 'approved') {
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Approved';
+            progressBar.classList.remove('progress-bar-animated');
+        } else if (data.status === 'rejected') {
+            progressBar.style.width = '100%';
+            progressBar.textContent = 'Rejected';
+            progressBar.classList.remove('progress-bar-animated', 'bg-primary');
+            progressBar.classList.add('bg-danger');
+        }
+    }
+}
+
+function showRejectionModal(reason, type) {
+    const modalElement = document.getElementById('rejectionModal');
+    const modal = new bootstrap.Modal(modalElement);
+    const reasonText = reason || 'This transaction was rejected. Please contact support for more information.';
+    document.getElementById('rejectionReason').textContent = reasonText;
+    
+    // Update buttons visibility
+    const depositBtn = document.querySelector('#rejectionModal a[href="/deposit"]');
+    const withdrawBtn = document.querySelector('#rejectionModal a[href="/withdraw"]');
+    
+    depositBtn.style.display = type === 'deposit' ? 'inline-block' : 'none';
+    withdrawBtn.style.display = type === 'withdrawal' ? 'inline-block' : 'none';
+    
+    // Show modal
+    modal.show();
+    
+    // Handle modal close
+    modalElement.addEventListener('hidden.bs.modal', function() {
+        // Remove modal backdrop and reset body styles
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+        document.body.classList.remove('modal-open');
+        document.body.style.paddingRight = '';
+        document.body.style.overflow = '';
+    }, { once: true });
+}
+
+function displayTransactions(page) {
+    const start = (page - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const transactionsToShow = allTransactions.slice(start, end);
+    const totalPages = Math.ceil(allTransactions.length / itemsPerPage);
+    
+    const tbody = document.getElementById('transactionsBody');
+    tbody.innerHTML = '';
+    
+    transactionsToShow.forEach(transaction => {
+        const tr = document.createElement('tr');
+        tr.id = `transaction-${transaction.id}`;
+        tr.className = transaction.status === 'pending' ? 'transaction-row transaction-row-pending' : 
+                      transaction.status === 'rejected' ? 'transaction-row transaction-row-rejected' : '';
+        tr.setAttribute('data-transaction-id', transaction.id);
+        tr.setAttribute('data-type', transaction.type);
+        tr.setAttribute('data-rejection-reason', transaction.rejection_reason);
+        
+        tr.innerHTML = `
+            <td class="text-nowrap">${transaction.timestamp}</td>
+            <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+            <td>${transaction.amount}</td>
+            <td>
+                ${transaction.status === 'approved' ? 
+                    '<span class="badge bg-success"><i class="fas fa-check"></i> Approved</span>' : 
+                 transaction.status === 'rejected' ? 
+                    '<span class="badge bg-danger transaction-status" data-bs-toggle="tooltip" data-bs-placement="top" title="Click for details"><i class="fas fa-times"></i> Rejected</span>' : 
+                    '<span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>'}
+            </td>
+            <td>
+                ${transaction.status === 'approved' ? 
+                    '<div class="text-center"><i class="fas fa-check-circle text-success" style="font-size: 24px;"></i></div>' :
+                 transaction.status === 'rejected' ? 
+                    '<div class="text-center rejected-reason" style="cursor: pointer;"><i class="fas fa-exclamation-circle text-danger" style="font-size: 24px;"></i></div>' :
+                    `<div class="progress" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%;" 
+                             data-transaction="${transaction.id}">
+                            Pending
+                        </div>
+                    </div>`}
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+    
+    // Update pagination controls
+    document.getElementById('prevPage').disabled = page === 1;
+    document.getElementById('nextPage').disabled = page >= totalPages;
+    document.getElementById('pageInfo').textContent = `Page ${page} of ${totalPages}`;
+    
+    // Reattach event listeners
+    attachTransactionListeners();
+}
+
+function attachTransactionListeners() {
+    // Attach click handlers for transaction rows
+    document.querySelectorAll('.transaction-row').forEach(row => {
+        row.addEventListener('click', function() {
+            const transactionId = this.getAttribute('data-transaction-id');
+            const type = this.getAttribute('data-type');
+            
+            // Only handle rejected transactions
+            if (this.classList.contains('transaction-row-rejected')) {
+                showRejectionModal(this.getAttribute('data-rejection-reason'), type);
+            }
+        });
+    });
+    
+    // Attach click handlers for rejected reasons
+    document.querySelectorAll('.rejected-reason').forEach(element => {
+        element.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const row = this.closest('tr');
+            showRejectionModal(row.getAttribute('data-rejection-reason'), row.getAttribute('data-type'));
+        });
+    });
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+}
+
+// Set up pagination controls
+document.getElementById('prevPage').addEventListener('click', () => {
+    if (currentPage > 1) {
+        currentPage--;
+        displayTransactions(currentPage);
+    }
+});
+
+document.getElementById('nextPage').addEventListener('click', () => {
+    const maxPage = Math.ceil(allTransactions.length / itemsPerPage);
+    if (currentPage < maxPage) {
+        currentPage++;
+        displayTransactions(currentPage);
+    }
+});
+
+// Initialize transactions
+document.addEventListener('DOMContentLoaded', function() {
+    // Store initial transactions from server-rendered HTML
+    allTransactions = Array.from(document.querySelectorAll('#transactionsBody tr')).map(row => ({
+        id: row.getAttribute('data-transaction-id'),
+        type: row.getAttribute('data-type'),
+        status: row.querySelector('.badge').textContent.trim().toLowerCase(),
+        element: row.outerHTML,
+        timestamp: row.querySelector('td:first-child').textContent,
+        amount: row.querySelector('td:nth-child(3)').textContent,
+        rejection_reason: row.getAttribute('data-rejection-reason') || ''
+    }));
+    
+    // Display first page
+    displayTransactions(1);
+    
+    // Set up click handlers for transaction rows
+    attachTransactionListeners();
+    
+    // Start auto-updates for pending transactions
+    setupAutoUpdate();
+});
+
+// Auto-update functionality
+function setupAutoUpdate() {
+    const transactions = document.querySelectorAll('[id^="transaction-"]');
+    transactions.forEach(row => {
+        const transactionId = row.id.split('-')[1];
+        const statusBadge = row.querySelector('.badge');
+        // Only update pending transactions
+        if (statusBadge && statusBadge.textContent.trim().toLowerCase() === 'pending') {
+            updateTransactionStatus(transactionId);
+        }
+    });
+}
+
+// Initial update
+setupAutoUpdate();
+
+// Check for updates every 5 seconds
+setInterval(setupAutoUpdate, 5000);
+
+// Initialize tooltips
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+});
+</script>
+{% endblock %} 
