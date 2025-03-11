@@ -49,8 +49,8 @@
                         <th>Type</th>
                         <th>Amount</th>
                         <th>UPI ID</th>
-                        <th>Proof</th>
-                        <th>Status</th>
+                        <th>Bank Name</th>
+                        <th>Screenshot</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -63,6 +63,7 @@
                         <td>{{ transaction.type.capitalize() }}</td>
                         <td class="text-nowrap">₹{{ "%.2f"|format(transaction.amount) }}</td>
                         <td>{{ transaction.upi_id if transaction.upi_id else 'N/A' }}</td>
+                        <td>{{ transaction.bank_account_name if transaction.bank_account_name else 'N/A' }}</td>
                         <td>
                             {% if transaction.screenshot %}
                             <button class="btn btn-sm btn-link image-link" 
@@ -72,12 +73,6 @@
                                 View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
                             </button>
                             {% endif %}
-                        </td>
-                        <td>
-                            <div class="progress" style="height: 20px; min-width: 100px;">
-                                <div class="progress-bar" role="progressbar" style="width: 0%;" 
-                                     data-transaction="{{ transaction.id }}">0%</div>
-                            </div>
                         </td>
                         <td class="action-buttons" data-transaction="{{ transaction.id }}">
                             {% if transaction.type == 'withdrawal' %}
@@ -149,6 +144,7 @@
                             <th>Amount</th>
                             <th>Status</th>
                             <th>UPI ID</th>
+                            <th>Bank Name</th>
                             <th>Proof</th>
                         </tr>
                     </thead>
@@ -376,6 +372,78 @@
 .btn-link:hover {
     text-decoration: underline;
 }
+
+/* Add new styles for transaction details */
+.transaction-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.transaction-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.transaction-type i {
+    font-size: 1rem;
+}
+
+.transaction-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.transaction-info small {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+/* Improved mobile styles */
+@media (max-width: 768px) {
+    .table td {
+        white-space: normal;
+        min-width: auto;
+        max-width: none;
+        padding: 0.5rem;
+    }
+    
+    .table th {
+        white-space: nowrap;
+        padding: 0.5rem;
+    }
+    
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .transaction-info {
+        font-size: 0.9rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+        border-radius: 0.5rem;
+    }
+    
+    .table-responsive {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+}
 </style>
 
 <script>
@@ -539,7 +607,12 @@ function displayHistoryTransactions(page) {
         tr.innerHTML = `
             <td>${new Date(transaction.timestamp).toLocaleString()}</td>
             <td>${transaction.username}</td>
-            <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
+            <td>
+                <div class="transaction-type">
+                    <i class="fas ${transaction.type === 'deposit' ? 'fa-arrow-up text-success' : 'fa-arrow-down text-danger'}"></i>
+                    ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                </div>
+            </td>
             <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
             <td>
                 <span class="badge ${
@@ -549,7 +622,12 @@ function displayHistoryTransactions(page) {
                     ${transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
                 </span>
             </td>
-            <td>${transaction.upi_id || 'N/A'}</td>
+            <td>
+                <div class="transaction-info">
+                    <span>${transaction.upi_id || 'N/A'}</span>
+                    <small>${transaction.bank_account_name || 'N/A'}</small>
+                </div>
+            </td>
             <td>
                 ${transaction.screenshot ? 
                     `<button class="btn btn-sm btn-link image-link" 
@@ -624,24 +702,27 @@ function updatePendingTransactions() {
     fetch('/get_pending_transactions')
         .then(response => response.json())
         .then(data => {
-            const pendingBody = document.getElementById('pendingTransactionsBody');
-            pendingBody.innerHTML = data.transactions.map(transaction => {
-                // Calculate progress based on transaction type and status
-                let progress = 0;
-                if (transaction.type === 'withdrawal') {
-                    if (transaction.upi_approved) progress += 50;
-                    if (transaction.payment_done) progress += 50;
-                } else {
-                    progress = transaction.status === 'pending' ? 50 : 100;
-                }
-
-                return `
-                <tr id="transaction-${transaction.id}">
+            const tbody = document.getElementById('pendingTransactionsBody');
+            tbody.innerHTML = '';
+            
+            data.transactions.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
                     <td>${new Date(transaction.timestamp).toLocaleString()}</td>
                     <td>${transaction.username}</td>
-                    <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
-                    <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
-                    <td>${transaction.upi_id || 'N/A'}</td>
+                    <td>
+                        <div class="transaction-type">
+                            <i class="fas ${transaction.type === 'deposit' ? 'fa-arrow-up text-success' : 'fa-arrow-down text-danger'}"></i>
+                            ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                        </div>
+                    </td>
+                    <td>₹${transaction.amount.toFixed(2)}</td>
+                    <td>
+                        <div class="transaction-info">
+                            <span>${transaction.upi_id || 'N/A'}</span>
+                            <small>${transaction.bank_account_name || 'N/A'}</small>
+                        </div>
+                    </td>
                     <td>
                         ${transaction.screenshot ? 
                             `<button class="btn btn-sm btn-link image-link" 
@@ -653,39 +734,32 @@ function updatePendingTransactions() {
                             'N/A'}
                     </td>
                     <td>
-                        <div class="progress" style="height: 20px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                 role="progressbar" 
-                                 style="width: ${progress}%;" 
-                                 data-transaction="${transaction.id}">
-                                 ${progress}%
-                            </div>
+                        <div class="btn-group">
+                            ${transaction.type === 'withdrawal' ? `
+                                <button class="btn btn-sm btn-info" onclick="approveUPI(${transaction.id})" 
+                                        ${transaction.upi_approved ? 'disabled' : ''}>
+                                    <i class="fas fa-check-circle"></i> ${transaction.upi_approved ? 'UPI Verified' : 'Verify UPI'}
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="markPaymentDone(${transaction.id})"
+                                        ${!transaction.upi_approved || transaction.payment_done ? 'disabled' : ''}>
+                                    <i class="fas fa-money-bill-wave"></i> ${transaction.payment_done ? 'Payment Done' : 'Mark Paid'}
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-sm btn-success" onclick="approveTransaction(${transaction.id})"
+                                    ${transaction.type === 'withdrawal' && (!transaction.upi_approved || !transaction.payment_done) ? 'disabled' : ''}>
+                                <i class="fas fa-check"></i> Approve
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="showRejectModal(${transaction.id})">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
                         </div>
                     </td>
-                    <td class="action-buttons" data-transaction="${transaction.id}">
-                        ${transaction.type === 'withdrawal' ? 
-                            (!transaction.upi_approved ? `
-                                <button class="btn btn-info btn-sm approve-upi" data-transaction="${transaction.id}">
-                                    <i class="fas fa-check-circle"></i> UPI
-                                </button>
-                            ` : !transaction.payment_done ? `
-                                <button class="btn btn-success btn-sm mark-paid" data-transaction="${transaction.id}">
-                                    <i class="fas fa-check"></i> Mark Paid
-                                </button>
-                            ` : '') : `
-                            <a href="/approve_transaction/${transaction.id}" class="btn btn-success btn-sm">
-                                <i class="fas fa-check"></i> Approve
-                            </a>
-                        `}
-                        <button class="btn btn-danger btn-sm reject-btn" data-transaction="${transaction.id}">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                    </td>
-                </tr>
-            `}).join('');
-
-            // Reattach event listeners
-            attachEventListeners();
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // Initialize tooltips and popovers
+            initializeTooltips();
         });
 }
 
@@ -804,6 +878,7 @@ function refreshPendingTransactions() {
                     <td>${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</td>
                     <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
                     <td>${transaction.upi_id || 'N/A'}</td>
+                    <td>${transaction.bank_account_name || 'N/A'}</td>
                     <td>
                         ${transaction.screenshot ? 
                             `<button class="btn btn-sm btn-link image-link" 
