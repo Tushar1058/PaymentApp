@@ -159,15 +159,15 @@
 </div>
 
 <!-- Image Modal -->
-<div class="modal fade" id="imageModal" tabindex="-1">
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Transaction Proof</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="imageModalLabel">Transaction Proof</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img id="modalImage" src="" class="img-fluid" style="max-height: 80vh;" alt="Transaction proof">
+                <img id="modalImage" src="" class="img-fluid" alt="Transaction proof">
             </div>
         </div>
     </div>
@@ -387,26 +387,16 @@ function updateUPISettingsDisplay() {
         });
 }
 
-function showImage(url) {
-    const modalElement = document.getElementById('imageModal');
-    const modalImage = document.getElementById('modalImage');
-    const modal = new bootstrap.Modal(modalElement);
-    
-    // Set image source
-    modalImage.src = url;
-    
-    // Show modal
+function showImage(imageUrl) {
+    const modal = new bootstrap.Modal(document.getElementById('imageModal'));
+    document.getElementById('modalImage').src = imageUrl;
     modal.show();
     
-    // Clear modal content when hidden
-    modalElement.addEventListener('hidden.bs.modal', function() {
-        modalImage.src = '';
-        document.body.classList.remove('modal-open');
-        const backdrop = document.querySelector('.modal-backdrop');
-        if (backdrop) {
-            backdrop.remove();
-        }
-    }, { once: true }); // Use once: true to prevent multiple event listeners
+    // Ensure proper cleanup when modal is hidden
+    document.getElementById('imageModal').addEventListener('hidden.bs.modal', function () {
+        document.getElementById('modalImage').src = '';
+        modal.dispose();
+    }, { once: true });
 }
 
 // Function to update transaction buttons

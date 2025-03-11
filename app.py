@@ -29,9 +29,12 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key')
 
 # Configure persistent sessions
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)  # Sessions last for 30 days
-app.config['SESSION_COOKIE_SECURE'] = True  # Only send cookie over HTTPS
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['REMEMBER_COOKIE_DURATION'] = timedelta(days=30)  # Remember me cookie duration
+app.config['REMEMBER_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to remember cookie
 
 try:
     # Update database configuration
@@ -293,11 +296,14 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        remember = True  # Always remember users
+        
         user = User.query.filter_by(username=username).first()
         if user and user.verify_password(password):
-            login_user(user, remember=True)  # Enable "remember me" functionality
-            session.permanent = True  # Make the session permanent
-            return redirect(url_for('index'))
+            login_user(user, remember=remember)
+            session.permanent = True
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
         flash('Invalid credentials')
     return render_template('login.html')
 
@@ -323,15 +329,18 @@ def register():
         
         user = User(
             username=username,
-            password=password,  # This will use the password setter
+            password=password,
             is_admin=is_admin
         )
         
         try:
             db.session.add(user)
             db.session.commit()
-            flash('Registration successful! Please login.')
-            return redirect(url_for('login'))
+            # Log in the user immediately after registration
+            login_user(user, remember=True)
+            session.permanent = True
+            flash('Registration successful!')
+            return redirect(url_for('index'))
         except:
             db.session.rollback()
             flash('Error during registration!')
