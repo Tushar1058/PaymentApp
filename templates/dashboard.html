@@ -175,6 +175,31 @@
         font-size: 1rem;
     }
 }
+
+.step {
+    text-align: center;
+    flex: 1;
+}
+.step-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+}
+.step-text {
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+.step.active .step-circle {
+    background-color: #0d6efd !important;
+}
+.step.completed .step-circle {
+    background-color: #198754 !important;
+}
 </style>
 
 <div class="card">
@@ -188,10 +213,10 @@
         <h3 class="h4">Your Balance: ₹{{ "%.2f"|format(user.balance) }}</h3>
         <div class="action-buttons-container">
             <a href="{{ url_for('deposit') }}" class="btn btn-primary action-button">
-                <i class="fas fa-arrow-up"></i> Deposit Money
+                <i class="fas fa-arrow-down-right text-white"></i> Deposit Money
             </a>
             <a href="{{ url_for('withdraw') }}" class="btn btn-secondary action-button">
-                <i class="fas fa-arrow-down"></i> Withdraw Money
+                <i class="fas fa-arrow-up-right text-white"></i> Withdraw Money
             </a>
         </div>
     </div>
@@ -230,7 +255,14 @@
                         data-type="{{ transaction.type }}"
                         data-rejection-reason="{{ transaction.rejection_reason if transaction.rejection_reason else '' }}">
                         <td class="text-nowrap">{{ transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                        <td>{{ transaction.type.capitalize() }}</td>
+                        <td>
+                            {% if transaction.type == 'deposit' %}
+                                <i class="fas fa-arrow-down-right text-success me-1"></i>
+                            {% else %}
+                                <i class="fas fa-arrow-up-right text-danger me-1"></i>
+                            {% endif %}
+                            {{ transaction.type.capitalize() }}
+                        </td>
                         <td>₹{{ "%.2f"|format(transaction.amount) }}</td>
                         <td>
                             {% if transaction.status == 'approved' %}
@@ -298,33 +330,6 @@
         </div>
     </div>
 </div>
-
-<style>
-.step {
-    text-align: center;
-    flex: 1;
-}
-.step-circle {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    color: white;
-}
-.step-text {
-    margin-top: 5px;
-    font-size: 0.9em;
-}
-.step.active .step-circle {
-    background-color: #0d6efd !important;
-}
-.step.completed .step-circle {
-    background-color: #198754 !important;
-}
-</style>
 
 <script>
 function refreshPage() {

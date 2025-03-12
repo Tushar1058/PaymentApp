@@ -117,8 +117,9 @@ class Transaction(db.Model):
     payment_done = db.Column(db.Boolean, default=False)
     screenshot = db.Column(db.String(200))
     upi_id = db.Column(db.String(100))
+    bank_account_name = db.Column(db.String(100))  # New field for bank account name
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    rejection_reason = db.Column(db.Text)  # New field for rejection reason
+    rejection_reason = db.Column(db.Text)  # For rejection reason
     user = db.relationship('User', backref='transactions')
 
 class UPISettings(db.Model):
@@ -139,14 +140,15 @@ def handle_db_migration():
         # Get existing columns in transaction table
         columns = [col['name'] for col in inspector.get_columns('transaction')]
         
-        # Add rejection_reason column if it doesn't exist
-        if 'rejection_reason' not in columns:
+        # Add bank_account_name column if it doesn't exist
+        if 'bank_account_name' not in columns:
             try:
                 with db.engine.connect() as conn:
-                    conn.execute(db.text('ALTER TABLE "transaction" ADD COLUMN rejection_reason TEXT'))
+                    conn.execute(db.text('ALTER TABLE "transaction" ADD COLUMN bank_account_name VARCHAR(100)'))
                     conn.commit()
+                logger.info("Added bank_account_name column to transaction table")
             except Exception as e:
-                print(f"Error adding rejection_reason column: {e}")
+                logger.error(f"Error adding bank_account_name column: {str(e)}")
                 # Try alternative approach for SQLite
                 with db.engine.connect() as conn:
                     conn.execute(db.text('BEGIN TRANSACTION'))
@@ -161,6 +163,7 @@ def handle_db_migration():
                             payment_done BOOLEAN,
                             screenshot VARCHAR(200),
                             upi_id VARCHAR(100),
+                            bank_account_name VARCHAR(100),
                             timestamp DATETIME,
                             rejection_reason TEXT,
                             FOREIGN KEY(user_id) REFERENCES "user" (id)
@@ -169,16 +172,17 @@ def handle_db_migration():
                     conn.execute(db.text('''
                         INSERT INTO "transaction_new" (
                             id, user_id, type, amount, status, upi_approved, payment_done,
-                            screenshot, upi_id, timestamp
+                            screenshot, upi_id, bank_account_name, timestamp, rejection_reason
                         )
                         SELECT id, user_id, type, amount, status, upi_approved, payment_done,
-                               screenshot, upi_id, timestamp
+                               screenshot, upi_id, bank_account_name, timestamp, rejection_reason
                         FROM "transaction"
                     '''))
                     conn.execute(db.text('DROP TABLE "transaction"'))
                     conn.execute(db.text('ALTER TABLE "transaction_new" RENAME TO "transaction"'))
                     conn.execute(db.text('COMMIT'))
                     conn.commit()
+                logger.info("Added bank_account_name column using table recreation")
         
         # Handle migration from password to password_hash
         if 'password' in columns and 'password_hash' not in columns:
@@ -442,6 +446,7 @@ def withdraw():
         try:
             amount = float(request.form['amount'])
             upi_id = request.form['upi_id']
+            bank_account_name = request.form['bank_account_name']
             
             # Validate amount and UPI ID
             if amount < 10:
@@ -452,6 +457,8 @@ def withdraw():
                 return jsonify({'error': 'Insufficient balance'}), 400
             if not upi_id or len(upi_id) < 5:
                 return jsonify({'error': 'Please enter a valid UPI ID'}), 400
+            if not bank_account_name or len(bank_account_name.strip()) < 2:
+                return jsonify({'error': 'Please enter your bank account name'}), 400
             
             qr_image = request.files['qr_code']
             if qr_image and allowed_file(qr_image.filename):
@@ -482,6 +489,7 @@ def withdraw():
                     type='withdrawal',
                     amount=amount,
                     upi_id=upi_id,
+                    bank_account_name=bank_account_name,
                     screenshot=filepath
                 )
                 db.session.add(transaction)
@@ -710,6 +718,7 @@ def get_all_transactions():
             'amount': float(t.amount),
             'status': t.status,
             'upi_id': t.upi_id,
+            'bank_account_name': t.bank_account_name,
             'screenshot': t.screenshot,
             'upi_approved': t.upi_approved,
             'payment_done': t.payment_done
@@ -732,6 +741,7 @@ def get_pending_transactions():
             'amount': float(t.amount),
             'status': t.status,
             'upi_id': t.upi_id,
+            'bank_account_name': t.bank_account_name,
             'screenshot': t.screenshot,
             'upi_approved': t.upi_approved,
             'payment_done': t.payment_done

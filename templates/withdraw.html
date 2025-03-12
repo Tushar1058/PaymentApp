@@ -40,6 +40,14 @@
             </div>
 
             <div class="mb-3">
+                <label for="bank_account_name" class="form-label">Bank Account Holder Name</label>
+                <input type="text" class="form-control" id="bank_account_name" name="bank_account_name" 
+                       placeholder="Enter the name as it appears on your bank account" required>
+                <div class="invalid-feedback" id="bankNameError"></div>
+                <small class="form-text text-muted">This should match the name registered with your UPI ID</small>
+            </div>
+
+            <div class="mb-3">
                 <label for="upi_id" class="form-label">Your UPI ID</label>
                 <input type="text" class="form-control" id="upi_id" name="upi_id" required>
                 <div class="invalid-feedback" id="upiError"></div>
@@ -139,6 +147,16 @@ function validateAmount(amount) {
     return null;
 }
 
+function validateBankName(bankName) {
+    if (!bankName || bankName.trim().length < 2) {
+        return 'Please enter your bank account holder name';
+    }
+    if (!/^[a-zA-Z\s]+$/.test(bankName.trim())) {
+        return 'Bank account name should only contain letters and spaces';
+    }
+    return null;
+}
+
 function validateUpiId(upiId) {
     if (!upiId || upiId.trim().length < 5) {
         return 'Please enter a valid UPI ID';
@@ -162,10 +180,12 @@ function validateQrCode(file) {
 
 function validateForm() {
     const amount = parseFloat(document.getElementById('amount').value);
+    const bankName = document.getElementById('bank_account_name').value;
     const upiId = document.getElementById('upi_id').value;
     const qrCode = document.getElementById('qr_code').files[0];
     
     const amountError = validateAmount(amount);
+    const bankNameError = validateBankName(bankName);
     const upiError = validateUpiId(upiId);
     const qrError = validateQrCode(qrCode);
     
@@ -177,6 +197,14 @@ function validateForm() {
         isValid = false;
     } else {
         document.getElementById('amount').classList.remove('is-invalid');
+    }
+    
+    if (bankNameError) {
+        document.getElementById('bank_account_name').classList.add('is-invalid');
+        document.getElementById('bankNameError').textContent = bankNameError;
+        isValid = false;
+    } else {
+        document.getElementById('bank_account_name').classList.remove('is-invalid');
     }
     
     if (upiError) {
