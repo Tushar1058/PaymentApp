@@ -69,17 +69,22 @@
                         <td class="text-nowrap">₹{{ "%.2f"|format(transaction.amount) }}</td>
                         <td>
                             <div class="transaction-info">
-                                <div class="upi-details">
-                                    <strong>UPI ID:</strong> {{ transaction.upi_id if transaction.upi_id else 'N/A' }}
-                                    {% if transaction.bank_account_name %}
-                                    <div class="bank-name">
-                                        <small class="text-muted">Bank Account: {{ transaction.bank_account_name }}</small>
-                                    </div>
-                                    {% endif %}
-                                </div>
+                                <span class="upi-id">{{ transaction.upi_id if transaction.upi_id else 'N/A' }}</span>
+                                {% if transaction.bank_account_name %}
+                                <small class="bank-name">{{ transaction.bank_account_name }}</small>
+                                {% endif %}
                             </div>
                         </td>
                         <td>
+                            {% if transaction.bank_account_name %}
+                            <div class="bank-account-info">
+                                <span>{{ transaction.bank_account_name }}</span>
+                            </div>
+                            {% else %}
+                            <span>N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="proof-cell">
                             {% if transaction.screenshot %}
                             <button class="btn btn-sm btn-link image-link" 
                                     data-image-url="{{ url_for('serve_file', filename=transaction.screenshot) }}"
@@ -88,42 +93,42 @@
                                 <i class="fas fa-image me-1"></i>
                                 View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
                             </button>
+                            {% else %}
+                            N/A
                             {% endif %}
                         </td>
                         <td class="action-buttons" data-transaction="{{ transaction.id }}">
                             {% if transaction.type == 'withdrawal' %}
+                                {% if not transaction.upi_approved %}
                                 <div class="btn-group-vertical w-100">
-                                    {% if not transaction.upi_approved %}
-                                    <div class="d-flex gap-2 mb-2">
-                                        <button class="btn btn-info btn-sm flex-grow-1 approve-upi" 
-                                                data-transaction="{{ transaction.id }}">
-                                            <i class="fas fa-check-circle"></i> Verify UPI
-                                        </button>
-                                        <button class="btn btn-danger btn-sm reject-btn"
-                                                data-transaction="{{ transaction.id }}">
-                                            <i class="fas fa-times"></i> Reject
-                                        </button>
-                                    </div>
-                                    {% elif not transaction.payment_done %}
-                                    <div class="d-flex gap-2">
-                                        <button class="btn btn-success btn-sm flex-grow-1 mark-paid" 
-                                                data-transaction="{{ transaction.id }}">
-                                            <i class="fas fa-money-bill-wave"></i> Mark Paid
-                                        </button>
-                                        <button class="btn btn-danger btn-sm reject-btn"
-                                                data-transaction="{{ transaction.id }}">
-                                            <i class="fas fa-times"></i> Reject
-                                        </button>
-                                    </div>
-                                    {% endif %}
+                                    <button class="btn btn-info btn-sm mb-1 approve-upi" 
+                                            data-transaction="{{ transaction.id }}">
+                                        <i class="fas fa-check-circle"></i> Verify UPI
+                                    </button>
+                                    <button class="btn btn-danger btn-sm reject-btn" 
+                                            data-transaction="{{ transaction.id }}">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
                                 </div>
+                                {% elif not transaction.payment_done %}
+                                <div class="btn-group-vertical w-100">
+                                    <button class="btn btn-success btn-sm mb-1 mark-paid" 
+                                            data-transaction="{{ transaction.id }}">
+                                        <i class="fas fa-money-bill-wave"></i> Mark Paid
+                                    </button>
+                                    <button class="btn btn-danger btn-sm reject-btn" 
+                                            data-transaction="{{ transaction.id }}">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                </div>
+                                {% endif %}
                             {% else %}
-                            <div class="d-flex gap-2">
+                            <div class="btn-group-vertical w-100">
                                 <a href="{{ url_for('approve_transaction', transaction_id=transaction.id) }}" 
-                                   class="btn btn-success btn-sm flex-grow-1">
+                                   class="btn btn-success btn-sm mb-1">
                                     <i class="fas fa-check"></i> Approve
                                 </a>
-                                <button class="btn btn-danger btn-sm reject-btn"
+                                <button class="btn btn-danger btn-sm reject-btn" 
                                         data-transaction="{{ transaction.id }}">
                                     <i class="fas fa-times"></i> Reject
                                 </button>
@@ -424,34 +429,171 @@
 .transaction-info {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-}
-
-.upi-details {
-    display: flex;
-    flex-direction: column;
     gap: 0.25rem;
 }
 
-.bank-name {
-    margin-top: 0.25rem;
+.transaction-info .upi-id {
+    font-weight: 500;
 }
 
-.bank-name small {
+.transaction-info .bank-name {
+    color: #6c757d;
     font-size: 0.85rem;
 }
 
-.action-buttons .btn-group-vertical {
+.bank-account-info {
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+/* Improved mobile styles */
+@media (max-width: 768px) {
+    .table td {
+        white-space: normal;
+        min-width: auto;
+        max-width: none;
+        padding: 0.5rem;
+    }
+    
+    .table th {
+        white-space: nowrap;
+        padding: 0.5rem;
+    }
+    
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .transaction-info {
+        font-size: 0.9rem;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+        border-radius: 0.5rem;
+    }
+    
+    .table-responsive {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .image-link {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+        color: #0d6efd;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .image-link:hover {
+        text-decoration: underline;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 100px;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+        margin: 0;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Fix scrolling and table layout */
+.table-container {
+    position: relative;
+    overflow: hidden;
+    margin: -1rem;
+    padding: 1rem;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: 70vh;
+    scrollbar-width: thin;
+}
+
+.table-responsive::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Fix image link display */
+.image-link {
+    color: #0d6efd;
+    text-decoration: none;
+    padding: 0.25rem 0;
+    display: inline-block;
+    font-size: 0.9rem;
+}
+
+.image-link:hover {
+    text-decoration: underline;
+}
+
+.proof-cell {
+    min-width: 120px;
+}
+
+/* Update action buttons styles */
+.action-buttons {
+    min-width: 140px;
+    padding: 0.5rem;
+}
+
+.btn-group-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     width: 100%;
 }
 
-.action-buttons .btn {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
-}
-
-.action-buttons .btn i {
-    margin-right: 0.25rem;
+.btn-group-vertical .btn {
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 @media (max-width: 768px) {
@@ -459,17 +601,9 @@
         min-width: 120px;
     }
     
-    .action-buttons .btn {
-        font-size: 0.8rem;
-        padding: 0.25rem 0.5rem;
-    }
-    
-    .transaction-info {
-        font-size: 0.9rem;
-    }
-    
-    .bank-name small {
-        font-size: 0.8rem;
+    .btn-group-vertical .btn {
+        padding: 0.4rem;
+        font-size: 0.85rem;
     }
 }
 </style>
@@ -652,14 +786,8 @@ function displayHistoryTransactions(page) {
             </td>
             <td>
                 <div class="transaction-info">
-                    <div class="upi-details">
-                        <strong>UPI ID:</strong> {{ transaction.upi_id if transaction.upi_id else 'N/A' }}
-                        {% if transaction.bank_account_name %}
-                        <div class="bank-name">
-                            <small class="text-muted">Bank Account: {{ transaction.bank_account_name }}</small>
-                        </div>
-                        {% endif %}
-                    </div>
+                    <span>${transaction.upi_id || 'N/A'}</span>
+                    <small>${transaction.bank_account_name || 'N/A'}</small>
                 </div>
             </td>
             <td class="proof-cell">
@@ -669,7 +797,7 @@ function displayHistoryTransactions(page) {
                              data-bs-toggle="modal" 
                              data-bs-target="#imageModal">
                         <i class="fas fa-image me-1"></i>
-                        View {{ 'Payment Proof' if transaction.type == 'deposit' else 'UPI QR' }}
+                        ${transaction.type === 'deposit' ? 'Payment Proof' : 'UPI QR'}
                     </button>` : 
                     'N/A'}
             </td>
@@ -754,14 +882,8 @@ function updatePendingTransactions() {
                     <td>₹${transaction.amount.toFixed(2)}</td>
                     <td>
                         <div class="transaction-info">
-                            <div class="upi-details">
-                                <strong>UPI ID:</strong> {{ transaction.upi_id if transaction.upi_id else 'N/A' }}
-                                {% if transaction.bank_account_name %}
-                                <div class="bank-name">
-                                    <small class="text-muted">Bank Account: {{ transaction.bank_account_name }}</small>
-                                </div>
-                                {% endif %}
-                            </div>
+                            <span>${transaction.upi_id || 'N/A'}</span>
+                            <small>${transaction.bank_account_name || 'N/A'}</small>
                         </div>
                     </td>
                     <td>
@@ -925,14 +1047,8 @@ function refreshPendingTransactions() {
                     <td>₹${parseFloat(transaction.amount).toFixed(2)}</td>
                     <td>
                         <div class="transaction-info">
-                            <div class="upi-details">
-                                <strong>UPI ID:</strong> {{ transaction.upi_id if transaction.upi_id else 'N/A' }}
-                                {% if transaction.bank_account_name %}
-                                <div class="bank-name">
-                                    <small class="text-muted">Bank Account: {{ transaction.bank_account_name }}</small>
-                                </div>
-                                {% endif %}
-                            </div>
+                            <span>${transaction.upi_id || 'N/A'}</span>
+                            <small>${transaction.bank_account_name || 'N/A'}</small>
                         </div>
                     </td>
                     <td>
